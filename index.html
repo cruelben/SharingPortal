@@ -163,7 +163,7 @@
 
   <!-- Footer con Versione Progressiva -->
   <footer class="py-4 text-center text-xs text-slate-500 border-t border-slate-800/40 mt-auto">
-    SharingPortal • Versione <span id="app-version">1.2.0</span>
+    SharingPortal • Versione <span id="app-version">1.3.0</span>
   </footer>
 
   <!-- MODALE OPZIONI -->
@@ -208,6 +208,13 @@
             <option value="2000">2 GB</option>
           </select>
         </div>
+        
+        <!-- URL Worker -->
+        <div class="flex flex-col gap-1">
+          <span class="text-sm font-medium text-slate-300">URL Cloudflare Worker</span>
+          <input id="opt-worker-url" type="url" placeholder="https://...workers.dev/upload" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200">
+          <p class="text-xs text-slate-500">Già pre-configurato per il tuo account.</p>
+        </div>
 
         <!-- Notifiche Audio -->
         <div class="flex items-center justify-between">
@@ -216,7 +223,7 @@
         </div>
       </div>
 
-      <button onclick="toggleOptionsModal()" class="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white font-medium rounded-xl transition text-sm mt-2">
+      <button onclick="saveOptions()" class="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white font-medium rounded-xl transition text-sm mt-2">
         Salva e Chiudi
       </button>
     </div>
@@ -224,6 +231,12 @@
 
   <!-- SCRIPT LOGICO SHARINGPORTAL -->
   <script>
+    const APP_VERSION = '1.3.0';
+    // INSERITO IL TUO URL QUI:
+    const DEFAULT_WORKER_URL = 'https://sharingportal-upload.cruelben.workers.dev'; 
+    const PIXELDRAIN_DOWNLOAD_BASE = 'https://pixeldrain.net/u/';
+    const MAX_UPLOAD_RETRIES = 3;
+
     let selectedFilesArray = [];
 
     // Inizializzazione Lucide Icons
@@ -232,6 +245,20 @@
     // Inizializzazione Token Utente Locale
     if (!localStorage.getItem('sharingportal_user_token')) {
       localStorage.setItem('sharingportal_user_token', 'token_' + Math.random().toString(36).substring(2, 9));
+    }
+
+    document.getElementById('app-version').innerText = APP_VERSION;
+
+    function getWorkerUrl() {
+      return (localStorage.getItem('sharingportal_worker_url') || DEFAULT_WORKER_URL).trim();
+    }
+
+    function isWorkerConfigured(url) {
+      return !!url && !url.includes('YOUR-WORKER') && /^https:\/\//i.test(url);
+    }
+
+    function getDownloadUrl(item) {
+      return item.downloadUrl || (PIXELDRAIN_DOWNLOAD_BASE + item.id);
     }
 
     // Gestione Tab Navigation
@@ -256,8 +283,24 @@
     // Modale Opzioni
     function toggleOptionsModal() {
       const modal = document.getElementById('options-modal');
-      modal.classList.toggle('hidden');
-      modal.classList.toggle('flex');
+      if (modal.classList.contains('hidden')) {
+        document.getElementById('opt-worker-url').value = getWorkerUrl();
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+      } else {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      }
+    }
+
+    function saveOptions() {
+      const workerUrl = document.getElementById('opt-worker-url').value.trim();
+      if (workerUrl && !/^https:\/\//i.test(workerUrl)) {
+        alert('Inserisci un URL HTTPS valido per il Cloudflare Worker.');
+        return;
+      }
+      localStorage.setItem('sharingportal_worker_url', workerUrl);
+      toggleOptionsModal();
     }
 
     // Cambio Tema (Dark vs Light Blu/Ardesia Rilassante)
@@ -298,7 +341,54 @@
       }
     }
 
-    // LOGICA CARICAMENTO DEPOSITO (Con supporto CORS tramite Proxy pubblico o chiamata diretta)
+    // Funzione per inviare un singolo file al Worker
+    async function uploadFileToWorker(file) {
+      const workerUrl = getWorkerUrl();
+
+      if (!isWorkerConfigured(workerUrl)) {
+        throw new Error('URL Cloudflare Worker non configurato. Apri Opzioni e inserisci l’URL del Worker.');
+      }
+
+      let lastError = null;
+
+      for (let attempt = 1; attempt <= MAX_UPLOAD_RETRIES; attempt++) {
+        try {
+          const formData = new FormData();
+          formData.append('file', file, file.name);
+
+          const response = await fetch(workerUrl, {
+            method: 'POST',
+            body: formData
+          });
+
+          const text = await response.text();
+          let data = null;
+
+          try { data = JSON.parse(text); } catch (_) {}
+
+          if (!response.ok) {
+            const baseError = data && data.error ? data.error : `HTTP ${response.status}`;
+            const details = data && data.details ? ` — ${data.details}` : '';
+            throw new Error(baseError + details);
+          }
+
+          if (!data || !data.id) {
+            throw new Error('Risposta del Worker non valida: ID file mancante.');
+          }
+
+          return data;
+        } catch (err) {
+          lastError = err;
+          if (attempt < MAX_UPLOAD_RETRIES) {
+            await new Promise(resolve => setTimeout(resolve, 600 * Math.pow(2, attempt - 1)));
+          }
+        }
+      }
+
+      throw lastError || new Error('Errore sconosciuto durante il caricamento.');
+    }
+
+    // LOGICA CARICAMENTO DEPOSITO
     async function startUploadProcess() {
       if (selectedFilesArray.length === 0) {
         alert("Seleziona almeno un file da inviare!");
@@ -313,67 +403,66 @@
         return;
       }
 
-      if (isDeposit) {
-        document.getElementById('selected-file-name').innerText = "Caricamento nel deposito in corso...";
-        let uploadedCount = 0;
+      if (!isDeposit) {
+        alert("La modalità P2P diretta non è ancora implementata. Attiva il Deposito Temporaneo per caricare i file.");
+        return;
+      }
 
-        for (let file of selectedFilesArray) {
-          const formData = new FormData();
-          formData.append("file", file);
+      const workerUrl = getWorkerUrl();
+      if (!isWorkerConfigured(workerUrl)) {
+        alert("Prima di caricare devi configurare il Cloudflare Worker nelle Opzioni.");
+        toggleOptionsModal();
+        return;
+      }
 
-          try {
-            // Utilizziamo un proxy CORS aperto per consentire il fetch da GitHub Pages verso Pixeldrain senza blocchi
-            const response = await fetch("https://api.allorigins.win/raw?url=" + encodeURIComponent("https://pixeldrain.com/api/file"), {
-              method: "POST",
-              body: formData
-            });
+      const successes = [];
+      const failures = [];
 
-            // Se il proxy non risponde correttamente, tentiamo la chiamata diretta come fallback
-            let data;
-            if (response.ok) {
-              const textRes = await response.text();
-              try { data = JSON.parse(textRes); } catch(e) { data = { id: textRes }; }
-            } else {
-              const directResponse = await fetch("https://pixeldrain.com/api/file", {
-                method: "POST",
-                body: formData
-              });
-              data = await directResponse.json();
-            }
+      for (let i = 0; i < selectedFilesArray.length; i++) {
+        const file = selectedFilesArray[i];
+        document.getElementById('selected-file-name').innerText = `Caricamento ${i + 1}/${selectedFilesArray.length}: ${file.name}`;
 
-            if (data && data.id) {
-              const queue = JSON.parse(localStorage.getItem('sharingportal_queue') || "[]");
-              queue.push({
-                id: data.id,
-                code: code,
-                name: file.name,
-                size: (file.size / (1024*1024)).toFixed(2) + " MB",
-                date: new Date().toLocaleDateString('it-IT')
-              });
-              localStorage.setItem('sharingportal_queue', JSON.stringify(queue));
-              uploadedCount++;
-            }
-          } catch (err) {
-            console.error("Errore invio file:", file.name, err);
-          }
+        try {
+          const data = await uploadFileToWorker(file);
+
+          const queue = JSON.parse(localStorage.getItem('sharingportal_queue') || "[]");
+          queue.push({
+            id: data.id,
+            code: code,
+            name: file.name,
+            size: (file.size / (1024*1024)).toFixed(2) + " MB",
+            date: new Date().toLocaleDateString('it-IT'),
+            downloadUrl: data.downloadUrl || (PIXELDRAIN_DOWNLOAD_BASE + data.id),
+            provider: data.provider || ''
+          });
+          localStorage.setItem('sharingportal_queue', JSON.stringify(queue));
+          
+          successes.push(file.name);
+        } catch (err) {
+          console.error("Errore invio file:", file.name, err);
+          failures.push({ name: file.name, error: err.message || String(err) });
         }
+      }
 
-        if (uploadedCount > 0) {
-          alert(`Operazione completata!\nCaricati ${uploadedCount} file con codice: ${code}`);
-          document.getElementById('selected-file-name').innerText = "Nessun file selezionato";
-          selectedFilesArray = [];
-          switchTab('queue');
-        } else {
-          alert("Errore durante il caricamento nel deposito. Verifica la connessione.");
-          document.getElementById('selected-file-name').innerText = "Errore di invio";
+      if (successes.length > 0) {
+        let message = `Operazione completata!\nCaricati ${successes.length}/${selectedFilesArray.length} file con codice: ${code}`;
+        if (failures.length > 0) {
+          message += '\n\nFile non riusciti:\n' + failures.map(f => `- ${f.name}: ${f.error}`).join('\n');
         }
+        alert(message);
+        
+        document.getElementById('selected-file-name').innerText = "Nessun file selezionato";
+        document.getElementById('file-input').value = '';
+        selectedFilesArray = [];
+        switchTab('queue');
       } else {
-        alert(`Modalità Diretta P2P attiva!\nRimani su questa pagina: i file verranno trasferiti direttamente non appena il destinatario inserisce il codice '${code}'.`);
+        alert("Errore durante il caricamento nel deposito.\n\n" + failures.map(f => `- ${f.name}: ${f.error}`).join('\n'));
+        document.getElementById('selected-file-name').innerText = "Errore di invio";
       }
     }
 
     // LOGICA SCARICAMENTO DEPOSITO
-    async function startDownloadProcess() {
+    function startDownloadProcess() {
       const code = document.getElementById('receive-code').value.trim();
       if (!code) {
         alert("Inserisci un codice per scaricare!");
@@ -381,12 +470,21 @@
       }
 
       const queue = JSON.parse(localStorage.getItem('sharingportal_queue') || "[]");
-      const found = queue.find(item => item.code.toLowerCase() === code.toLowerCase());
+      const foundItems = queue.filter(item => item.code.toLowerCase() === code.toLowerCase());
 
-      if (found) {
-        window.open(`https://pixeldrain.com/u/${found.id}`, '_blank');
+      if (foundItems.length > 0) {
+        foundItems.forEach((item, index) => {
+          if (index === 0) {
+            window.open(getDownloadUrl(item), '_blank');
+          } else {
+            setTimeout(() => window.open(getDownloadUrl(item), '_blank'), 300 * index);
+          }
+        });
+        if (foundItems.length > 1) {
+          alert(`Trovati ${foundItems.length} file con il codice '${code}'. Apro le relative pagine di download.`);
+        }
       } else {
-        alert(`Nessun file trovato localmente con il codice '${code}'. Se è stato inviato da un altro dispositivo, la sincronizzazione cloud tramite codice verrà completata a breve.`);
+        alert(`Nessun file trovato localmente con il codice '${code}'.\n\nNota: la coda è salvata solo nel browser che ha effettuato il caricamento.`);
       }
     }
 
@@ -415,7 +513,7 @@
             </div>
           </div>
           <div class="flex items-center gap-2">
-            <a href="https://pixeldrain.com/u/${item.id}" target="_blank" class="p-2 rounded-xl bg-brand-500/10 hover:bg-brand-500/20 text-brand-400 border border-brand-500/20 transition flex-shrink-0" title="Scarica file">
+            <a href="${getDownloadUrl(item)}" target="_blank" class="p-2 rounded-xl bg-brand-500/10 hover:bg-brand-500/20 text-brand-400 border border-brand-500/20 transition flex-shrink-0" title="Scarica file">
               <i data-lucide="download" class="w-4 h-4"></i>
             </a>
             <button onclick="removeFromQueue(${index})" class="p-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition flex-shrink-0" title="Elimina dal deposito">
