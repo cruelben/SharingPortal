@@ -74,7 +74,7 @@
     <!-- TAB 1: INVIA -->
     <section id="content-send" class="flex flex-col gap-5">
       <div class="border-2 border-dashed border-slate-800 hover:border-brand-500/50 rounded-3xl p-8 bg-slate-950/40 text-center transition flex flex-col items-center justify-center gap-4 cursor-pointer relative" id="drop-zone">
-        <!-- Rimosso attributo unico per consentire la selezione di PIÙ FILE -->
+        <!-- Supporto Multi-File abilitato -->
         <input type="file" id="file-input" class="hidden" multiple onchange="handleFileSelect(event)">
         <div class="w-16 h-16 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-brand-400">
           <i data-lucide="file-up" class="w-8 h-8"></i>
@@ -162,6 +162,11 @@
 
   </main>
 
+  <!-- Footer con Versione Progressiva -->
+  <footer class="py-4 text-center text-xs text-slate-500 border-t border-slate-800/40 mt-auto">
+    SharingPortal • Versione <span id="app-version">1.1.0</span>
+  </footer>
+
   <!-- MODALE OPZIONI -->
   <div id="options-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
     <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 flex flex-col gap-5 shadow-2xl">
@@ -195,7 +200,7 @@
           </select>
         </div>
 
-        <!-- Dimensione Massima (Default impostato a 1 GB) -->
+        <!-- Dimensione Massima (Default 1 GB) -->
         <div class="flex items-center justify-between">
           <span class="text-sm font-medium text-slate-300">Limite Deposito</span>
           <select id="opt-max-size" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-sm text-slate-200">
@@ -294,7 +299,7 @@
       }
     }
 
-    // LOGICA CARICAMENTO DEPOSITO
+    // LOGICA CARICAMENTO DEPOSITO (Corretta per Pixeldrain e salvataggio in coda)
     async function startUploadProcess() {
       if (selectedFilesArray.length === 0) {
         alert("Seleziona almeno un file da inviare!");
@@ -311,8 +316,8 @@
 
       if (isDeposit) {
         document.getElementById('selected-file-name').innerText = "Caricamento nel deposito in corso...";
+        let uploadedCount = 0;
 
-        // Processo di invio per ciascun file
         for (let file of selectedFilesArray) {
           const formData = new FormData();
           formData.append("file", file);
@@ -325,7 +330,8 @@
 
             const data = await response.json();
 
-            if (data.success) {
+            // Controllo corretto sulla risposta di Pixeldrain
+            if (response.ok && data.id) {
               const queue = JSON.parse(localStorage.getItem('sharingportal_queue') || "[]");
               queue.push({
                 id: data.id,
@@ -335,16 +341,22 @@
                 date: new Date().toLocaleDateString('it-IT')
               });
               localStorage.setItem('sharingportal_queue', JSON.stringify(queue));
+              uploadedCount++;
             }
           } catch (err) {
             console.error("Errore invio file:", file.name, err);
           }
         }
 
-        alert(`Operazione completata!\nCodice di ritiro associato: ${code}`);
-        document.getElementById('selected-file-name').innerText = "Nessun file selezionato";
-        selectedFilesArray = [];
-        switchTab('queue');
+        if (uploadedCount > 0) {
+          alert(`Operazione completata!\nCaricati ${uploadedCount} file con codice: ${code}`);
+          document.getElementById('selected-file-name').innerText = "Nessun file selezionato";
+          selectedFilesArray = [];
+          switchTab('queue');
+        } else {
+          alert("Errore durante il caricamento nel deposito.");
+          document.getElementById('selected-file-name').innerText = "Errore di invio";
+        }
       } else {
         alert(`Modalità Diretta P2P attiva!\nRimani su questa pagina: i file verranno trasferiti direttamente non appena il destinatario inserisce il codice '${code}'.`);
       }
