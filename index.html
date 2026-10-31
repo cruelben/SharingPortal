@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="it" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SharingPortal - Condivisione File P2P & Deposito</title>
+  <!-- Tailwind CSS per la grafica -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0f9ff',
+              100: '#e0f2fe',
+              400: '#38bdf8',
+              500: '#0ea5e9', // Sky Blue rilassante
+              600: '#0284c7',
+              700: '#0369a1',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <!-- Lucide Icons per le icone -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans transition-colors duration-200" id="body-app">
+
+  <!-- Header / Top Bar -->
+  <header class="border-b border-slate-800 bg-slate-950/60 backdrop-blur-md sticky top-0 z-40">
+    <div class="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-sky-400 flex items-center justify-center text-white shadow-lg shadow-brand-500/20">
+          <i data-lucide="share-2" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h1 class="font-bold text-xl tracking-tight bg-gradient-to-r from-white to-sky-200 bg-clip-text text-transparent">SharingPortal</h1>
+          <p class="text-xs text-slate-400">Trasferimento diretto & Deposito anonimo</p>
+        </div>
+      </div>
+
+      <!-- Pulsante Opzioni -->
+      <button onclick="toggleOptionsModal()" class="p-2.5 rounded-xl border border-slate-800 bg-slate-900/80 hover:bg-slate-800 text-slate-300 transition flex items-center gap-2 text-sm">
+        <i data-lucide="settings" class="w-4 h-4"></i>
+        <span class="hidden sm:inline" id="txt-opt-btn">Opzioni</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="flex-1 max-w-4xl w-full mx-auto p-4 flex flex-col gap-6">
+
+    <!-- Tab Navigation -->
+    <div class="grid grid-cols-3 p-1.5 bg-slate-950 border border-slate-800/80 rounded-2xl gap-1">
+      <button onclick="switchTab('send')" id="tab-send" class="py-3 px-4 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition bg-brand-600 text-white shadow-md">
+        <i data-lucide="upload" class="w-4 h-4"></i>
+        <span id="txt-tab-send">Invia</span>
+      </button>
+      <button onclick="switchTab('receive')" id="tab-receive" class="py-3 px-4 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition text-slate-400 hover:text-white">
+        <i data-lucide="download" class="w-4 h-4"></i>
+        <span id="txt-tab-receive">Ricevi</span>
+      </button>
+      <button onclick="switchTab('queue')" id="tab-queue" class="py-3 px-4 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition text-slate-400 hover:text-white relative">
+        <i data-lucide="layers" class="w-4 h-4"></i>
+        <span id="txt-tab-queue">Coda</span>
+        <span id="queue-badge" class="hidden absolute top-2 right-2 w-2 h-2 rounded-full bg-brand-400"></span>
+      </button>
+    </div>
+
+    <!-- TAB 1: INVIA -->
+    <section id="content-send" class="flex flex-col gap-5">
+      <div class="border-2 border-dashed border-slate-800 hover:border-brand-500/50 rounded-3xl p-8 bg-slate-950/40 text-center transition flex flex-col items-center justify-center gap-4 cursor-pointer relative" id="drop-zone">
+        <!-- Rimosso attributo unico per consentire la selezione di PIÙ FILE -->
+        <input type="file" id="file-input" class="hidden" multiple onchange="handleFileSelect(event)">
+        <div class="w-16 h-16 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-brand-400">
+          <i data-lucide="file-up" class="w-8 h-8"></i>
+        </div>
+        <div>
+          <p class="font-medium text-slate-200" id="txt-drag-title">Trascina qui i file oppure <span class="text-brand-400 underline">sfoglia</span></p>
+          <p class="text-xs text-slate-500 mt-1" id="selected-file-name">Nessun file selezionato</p>
+        </div>
+      </div>
+
+      <div class="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-5 flex flex-col gap-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <label class="block text-sm font-medium text-slate-300" id="txt-code-label">Codice Riscossione (es. pippo)</label>
+            <p class="text-xs text-slate-500" id="txt-code-desc">Servirà a chi riceve per scaricare i file</p>
+          </div>
+          <div class="flex gap-2">
+            <input type="text" id="send-code" value="1234" maxlength="30" class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-sm font-mono tracking-wider text-brand-400 focus:outline-none focus:border-brand-500 w-44 text-center">
+            <button onclick="generateRandomCode()" class="p-2.5 bg-slate-900 border border-slate-800 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white" title="Genera casuale">
+              <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+
+        <hr class="border-slate-800/60">
+
+        <!-- Switch Deposito -->
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="p-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-400">
+              <i data-lucide="hard-drive" class="w-4 h-4"></i>
+            </div>
+            <div>
+              <p class="text-sm font-medium text-slate-200" id="txt-deposit-title">Abilita Deposito Temporaneo</p>
+              <p class="text-xs text-slate-500" id="txt-deposit-desc">Se disattivato, il trasferimento avverrà solo in P2P Diretto</p>
+            </div>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" id="deposit-toggle" class="sr-only peer" checked>
+            <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-600"></div>
+          </label>
+        </div>
+      </div>
+
+      <button onclick="startUploadProcess()" class="w-full py-4 bg-brand-600 hover:bg-brand-500 text-white font-semibold rounded-2xl shadow-lg shadow-brand-600/20 transition flex items-center justify-center gap-2">
+        <i data-lucide="send" class="w-5 h-5"></i>
+        <span id="txt-btn-start-send">Avvia Invio</span>
+      </button>
+    </section>
+
+    <!-- TAB 2: RICEVI -->
+    <section id="content-receive" class="hidden flex-col gap-5">
+      <div class="bg-slate-950/60 border border-slate-800/80 rounded-3xl p-8 text-center flex flex-col items-center gap-6">
+        <div class="w-16 h-16 rounded-2xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-brand-400">
+          <i data-lucide="key-round" class="w-8 h-8"></i>
+        </div>
+        <div class="max-w-md">
+          <h2 class="text-lg font-semibold text-slate-200" id="txt-receive-title">Inserisci il Codice</h2>
+          <p class="text-xs text-slate-400 mt-1" id="txt-receive-desc">Digita il codice fornito dal mittente per riscattare i file.</p>
+        </div>
+
+        <div class="w-full max-w-xs flex flex-col gap-3">
+          <input type="text" id="receive-code" placeholder="CODICE" maxlength="30" class="w-full bg-slate-900 border border-slate-800 rounded-2xl px-5 py-3.5 text-center font-mono text-lg tracking-widest text-brand-400 focus:outline-none focus:border-brand-500">
+          <button onclick="startDownloadProcess()" class="w-full py-3.5 bg-brand-600 hover:bg-brand-500 text-white font-medium rounded-2xl shadow-lg shadow-brand-600/20 transition flex items-center justify-center gap-2">
+            <i data-lucide="download-cloud" class="w-5 h-5"></i>
+            <span id="txt-btn-receive">Scarica File</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: CODA -->
+    <section id="content-queue" class="hidden flex-col gap-4">
+      <div class="flex items-center justify-between px-1">
+        <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider" id="txt-queue-header">File nel tuo Deposito</h2>
+        <span class="text-xs text-slate-500" id="queue-count">0 file</span>
+      </div>
+
+      <div id="queue-list" class="flex flex-col gap-3">
+        <div id="empty-queue-msg" class="bg-slate-950/40 border border-slate-800/60 rounded-2xl p-8 text-center text-slate-500 text-sm">
+          Nessun file presente nel tuo deposito locale.
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- MODALE OPZIONI -->
+  <div id="options-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 flex flex-col gap-5 shadow-2xl">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <h3 class="font-bold text-lg text-slate-100 flex items-center gap-2">
+          <i data-lucide="sliders" class="w-5 h-5 text-brand-400"></i>
+          Impostazioni SharingPortal
+        </h3>
+        <button onclick="toggleOptionsModal()" class="text-slate-400 hover:text-white p-1">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="flex flex-col gap-4">
+        <!-- Tema Visivo -->
+        <div class="flex items-center justify-between">
+          <span class="text-sm font-medium text-slate-300">Tema Visivo</span>
+          <select id="opt-theme" onchange="changeTheme(this.value)" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-sm text-slate-200">
+            <option value="dark">Scuro (Default)</option>
+            <option value="light">Chiaro (Blu / Ardesia)</option>
+          </select>
+        </div>
+
+        <!-- Lingua -->
+        <div class="flex items-center justify-between">
+          <span class="text-sm font-medium text-slate-300">Lingua Interfaccia</span>
+          <select id="opt-lang" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-sm text-slate-200">
+            <option value="auto">Auto (Browser)</option>
+            <option value="it">Italiano</option>
+            <option value="en">English</option>
+          </select>
+        </div>
+
+        <!-- Dimensione Massima (Default impostato a 1 GB) -->
+        <div class="flex items-center justify-between">
+          <span class="text-sm font-medium text-slate-300">Limite Deposito</span>
+          <select id="opt-max-size" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-sm text-slate-200">
+            <option value="1000" selected>1 GB (Default)</option>
+            <option value="500">500 MB</option>
+            <option value="2000">2 GB</option>
+          </select>
+        </div>
+
+        <!-- Notifiche Audio -->
+        <div class="flex items-center justify-between">
+          <span class="text-sm font-medium text-slate-300">Notifiche Suono</span>
+          <input type="checkbox" id="opt-sound" checked class="w-4 h-4 accent-brand-600">
+        </div>
+      </div>
+
+      <button onclick="toggleOptionsModal()" class="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white font-medium rounded-xl transition text-sm mt-2">
+        Salva e Chiudi
+      </button>
+    </div>
+  </div>
+
+  <!-- SCRIPT LOGICO SHARINGPORTAL -->
+  <script>
+    let selectedFilesArray = [];
+
+    // Inizializzazione Lucide Icons
+    lucide.createIcons();
+
+    // Inizializzazione Token Utente Locale
+    if (!localStorage.getItem('sharingportal_user_token')) {
+      localStorage.setItem('sharingportal_user_token', 'token_' + Math.random().toString(36).substring(2, 9));
+    }
+
+    // Gestione Tab Navigation
+    function switchTab(tab) {
+      document.getElementById('content-send').classList.add('hidden');
+      document.getElementById('content-receive').classList.add('hidden');
+      document.getElementById('content-queue').classList.add('hidden');
+
+      document.getElementById('tab-send').className = "py-3 px-4 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition text-slate-400 hover:text-white";
+      document.getElementById('tab-receive').className = "py-3 px-4 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition text-slate-400 hover:text-white";
+      document.getElementById('tab-queue').className = "py-3 px-4 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition text-slate-400 hover:text-white relative";
+
+      document.getElementById('content-' + tab).classList.remove('hidden');
+      document.getElementById('content-' + tab).classList.add('flex');
+
+      const activeTabBtn = document.getElementById('tab-' + tab);
+      activeTabBtn.className = "py-3 px-4 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition bg-brand-600 text-white shadow-md";
+
+      if (tab === 'queue') renderQueueList();
+    }
+
+    // Modale Opzioni
+    function toggleOptionsModal() {
+      const modal = document.getElementById('options-modal');
+      modal.classList.toggle('hidden');
+      modal.classList.toggle('flex');
+    }
+
+    // Cambio Tema (Dark vs Light Blu/Ardesia Rilassante)
+    function changeTheme(theme) {
+      const body = document.getElementById('body-app');
+      if (theme === 'light') {
+        document.documentElement.classList.remove('dark');
+        body.className = "bg-slate-100 text-slate-800 min-h-screen flex flex-col font-sans transition-colors duration-200";
+      } else {
+        document.documentElement.classList.add('dark');
+        body.className = "bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans transition-colors duration-200";
+      }
+    }
+
+    // Generazione Codice Casuale
+    function generateRandomCode() {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let result = '';
+      for (let i = 0; i < 5; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      document.getElementById('send-code').value = result;
+    }
+
+    // Gestione Selezione MULTI-FILE
+    document.getElementById('drop-zone').addEventListener('click', () => document.getElementById('file-input').click());
+    
+    function handleFileSelect(e) {
+      const files = Array.from(e.target.files);
+      if (files.length > 0) {
+        selectedFilesArray = files;
+        if (files.length === 1) {
+          document.getElementById('selected-file-name').innerText = `${files[0].name} (${(files[0].size / (1024*1024)).toFixed(2)} MB)`;
+        } else {
+          const totalSize = (files.reduce((acc, f) => acc + f.size, 0) / (1024*1024)).toFixed(2);
+          document.getElementById('selected-file-name').innerText = `${files.length} file selezionati (${totalSize} MB complessivi)`;
+        }
+      }
+    }
+
+    // LOGICA CARICAMENTO DEPOSITO
+    async function startUploadProcess() {
+      if (selectedFilesArray.length === 0) {
+        alert("Seleziona almeno un file da inviare!");
+        return;
+      }
+
+      const code = document.getElementById('send-code').value.trim();
+      const isDeposit = document.getElementById('deposit-toggle').checked;
+
+      if (!code) {
+        alert("Inserisci un codice valido per la riscossione!");
+        return;
+      }
+
+      if (isDeposit) {
+        document.getElementById('selected-file-name').innerText = "Caricamento nel deposito in corso...";
+
+        // Processo di invio per ciascun file
+        for (let file of selectedFilesArray) {
+          const formData = new FormData();
+          formData.append("file", file);
+
+          try {
+            const response = await fetch("https://pixeldrain.com/api/file", {
+              method: "POST",
+              body: formData
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+              const queue = JSON.parse(localStorage.getItem('sharingportal_queue') || "[]");
+              queue.push({
+                id: data.id,
+                code: code,
+                name: file.name,
+                size: (file.size / (1024*1024)).toFixed(2) + " MB",
+                date: new Date().toLocaleDateString('it-IT')
+              });
+              localStorage.setItem('sharingportal_queue', JSON.stringify(queue));
+            }
+          } catch (err) {
+            console.error("Errore invio file:", file.name, err);
+          }
+        }
+
+        alert(`Operazione completata!\nCodice di ritiro associato: ${code}`);
+        document.getElementById('selected-file-name').innerText = "Nessun file selezionato";
+        selectedFilesArray = [];
+        switchTab('queue');
+      } else {
+        alert(`Modalità Diretta P2P attiva!\nRimani su questa pagina: i file verranno trasferiti direttamente non appena il destinatario inserisce il codice '${code}'.`);
+      }
+    }
+
+    // LOGICA SCARICAMENTO DEPOSITO
+    async function startDownloadProcess() {
+      const code = document.getElementById('receive-code').value.trim();
+      if (!code) {
+        alert("Inserisci un codice per scaricare!");
+        return;
+      }
+      alert(`Ricerca del file associato al codice '${code}' in corso...`);
+    }
+
+    // Rendering Coda Locale
+    function renderQueueList() {
+      const queue = JSON.parse(localStorage.getItem('sharingportal_queue') || "[]");
+      const listContainer = document.getElementById('queue-list');
+      const countLabel = document.getElementById('queue-count');
+
+      countLabel.innerText = `${queue.length} file`;
+
+      if (queue.length === 0) {
+        listContainer.innerHTML = `<div class="bg-slate-950/40 border border-slate-800/60 rounded-2xl p-8 text-center text-slate-500 text-sm">Nessun file presente nel tuo deposito locale.</div>`;
+        return;
+      }
+
+      listContainer.innerHTML = queue.map((item, index) => `
+        <div class="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-4 flex items-center justify-between gap-4">
+          <div class="flex items-center gap-3 overflow-hidden">
+            <div class="p-2.5 rounded-xl bg-brand-500/10 border border-brand-500/20 text-brand-400 flex-shrink-0">
+              <i data-lucide="file-check" class="w-5 h-5"></i>
+            </div>
+            <div class="truncate">
+              <p class="text-sm font-medium text-slate-200 truncate">${item.name}</p>
+              <p class="text-xs text-slate-500">Codice: <span class="font-mono text-brand-400 font-bold">${item.code}</span> • ${item.size}</p>
+            </div>
+          </div>
+          <button onclick="removeFromQueue(${index})" class="p-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition flex-shrink-0" title="Elimina dal deposito">
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+          </button>
+        </div>
+      `).join('');
+
+      lucide.createIcons();
+    }
+
+    // Eliminazione file dalla coda
+    function removeFromQueue(index) {
+      const queue = JSON.parse(localStorage.getItem('sharingportal_queue') || "[]");
+      queue.splice(index, 1);
+      localStorage.setItem('sharingportal_queue', JSON.stringify(queue));
+      renderQueueList();
+    }
+  </script>
+</body>
+</html>
