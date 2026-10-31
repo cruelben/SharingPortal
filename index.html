@@ -208,13 +208,6 @@
             <option value="2000">2 GB</option>
           </select>
         </div>
-        
-        <!-- URL Worker -->
-        <div class="flex flex-col gap-1">
-          <span class="text-sm font-medium text-slate-300">URL Cloudflare Worker</span>
-          <input id="opt-worker-url" type="url" placeholder="https://...workers.dev/upload" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200">
-          <p class="text-xs text-slate-500">Già pre-configurato per il tuo account.</p>
-        </div>
 
         <!-- Notifiche Audio -->
         <div class="flex items-center justify-between">
@@ -223,7 +216,7 @@
         </div>
       </div>
 
-      <button onclick="saveOptions()" class="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white font-medium rounded-xl transition text-sm mt-2">
+      <button onclick="toggleOptionsModal()" class="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white font-medium rounded-xl transition text-sm mt-2">
         Salva e Chiudi
       </button>
     </div>
@@ -231,13 +224,33 @@
 
   <!-- SCRIPT LOGICO SHARINGPORTAL -->
   <script>
-    const APP_VERSION = '1.3.0';
-    // INSERITO IL TUO URL QUI:
-    const DEFAULT_WORKER_URL = 'https://sharingportal-upload.cruelben.workers.dev'; 
-    const PIXELDRAIN_DOWNLOAD_BASE = 'https://pixeldrain.net/u/';
-    const MAX_UPLOAD_RETRIES = 3;
-
     let selectedFilesArray = [];
+
+    // URL del Cloudflare Worker che inoltra i file a Pixeldrain.
+    // Dopo aver pubblicato il Worker, sostituisci questo indirizzo con il tuo.
+    const UPLOAD_API_URL = "https://sharingportal-upload.cruelben.workers.dev/upload";
+    const DEFAULT_FILE_HOST = "pixeldrain.net";
+
+    function readQueue() {
+      try {
+        const value = JSON.parse(localStorage.getItem('sharingportal_queue') || "[]");
+        return Array.isArray(value) ? value : [];
+      } catch (error) {
+        console.error("Coda locale non leggibile:", error);
+        return [];
+      }
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>\"']/g, char => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', "'": '&#39;'
+      })[char]);
+    }
+
+    function getFileHost(item) {
+      const host = String(item.host || DEFAULT_FILE_HOST).toLowerCase();
+      return ["pixeldrain.net", "pixeldra.in"].includes(host) ? host : DEFAULT_FILE_HOST;
+    }
 
     // Inizializzazione Lucide Icons
     lucide.createIcons();
@@ -245,20 +258,6 @@
     // Inizializzazione Token Utente Locale
     if (!localStorage.getItem('sharingportal_user_token')) {
       localStorage.setItem('sharingportal_user_token', 'token_' + Math.random().toString(36).substring(2, 9));
-    }
-
-    document.getElementById('app-version').innerText = APP_VERSION;
-
-    function getWorkerUrl() {
-      return (localStorage.getItem('sharingportal_worker_url') || DEFAULT_WORKER_URL).trim();
-    }
-
-    function isWorkerConfigured(url) {
-      return !!url && !url.includes('YOUR-WORKER') && /^https:\/\//i.test(url);
-    }
-
-    function getDownloadUrl(item) {
-      return item.downloadUrl || (PIXELDRAIN_DOWNLOAD_BASE + item.id);
     }
 
     // Gestione Tab Navigation
@@ -283,24 +282,8 @@
     // Modale Opzioni
     function toggleOptionsModal() {
       const modal = document.getElementById('options-modal');
-      if (modal.classList.contains('hidden')) {
-        document.getElementById('opt-worker-url').value = getWorkerUrl();
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
-      } else {
-        modal.classList.add('hidden');
-        modal.classList.remove('flex');
-      }
-    }
-
-    function saveOptions() {
-      const workerUrl = document.getElementById('opt-worker-url').value.trim();
-      if (workerUrl && !/^https:\/\//i.test(workerUrl)) {
-        alert('Inserisci un URL HTTPS valido per il Cloudflare Worker.');
-        return;
-      }
-      localStorage.setItem('sharingportal_worker_url', workerUrl);
-      toggleOptionsModal();
+      modal.classList.toggle('hidden');
+      modal.classList.toggle('flex');
     }
 
     // Cambio Tema (Dark vs Light Blu/Ardesia Rilassante)
@@ -341,54 +324,8 @@
       }
     }
 
-    // Funzione per inviare un singolo file al Worker
-    async function uploadFileToWorker(file) {
-      const workerUrl = getWorkerUrl();
-
-      if (!isWorkerConfigured(workerUrl)) {
-        throw new Error('URL Cloudflare Worker non configurato. Apri Opzioni e inserisci l’URL del Worker.');
-      }
-
-      let lastError = null;
-
-      for (let attempt = 1; attempt <= MAX_UPLOAD_RETRIES; attempt++) {
-        try {
-          const formData = new FormData();
-          formData.append('file', file, file.name);
-
-          const response = await fetch(workerUrl, {
-            method: 'POST',
-            body: formData
-          });
-
-          const text = await response.text();
-          let data = null;
-
-          try { data = JSON.parse(text); } catch (_) {}
-
-          if (!response.ok) {
-            const baseError = data && data.error ? data.error : `HTTP ${response.status}`;
-            const details = data && data.details ? ` — ${data.details}` : '';
-            throw new Error(baseError + details);
-          }
-
-          if (!data || !data.id) {
-            throw new Error('Risposta del Worker non valida: ID file mancante.');
-          }
-
-          return data;
-        } catch (err) {
-          lastError = err;
-          if (attempt < MAX_UPLOAD_RETRIES) {
-            await new Promise(resolve => setTimeout(resolve, 600 * Math.pow(2, attempt - 1)));
-          }
-        }
-      }
-
-      throw lastError || new Error('Errore sconosciuto durante il caricamento.');
-    }
-
     // LOGICA CARICAMENTO DEPOSITO
+    // Il browser invia il file al Worker; il Worker contatta Pixeldrain server-side.
     async function startUploadProcess() {
       if (selectedFilesArray.length === 0) {
         alert("Seleziona almeno un file da inviare!");
@@ -397,6 +334,8 @@
 
       const code = document.getElementById('send-code').value.trim();
       const isDeposit = document.getElementById('deposit-toggle').checked;
+      const statusLabel = document.getElementById('selected-file-name');
+      const startButton = document.querySelector("button[onclick=\"startUploadProcess()\"]");
 
       if (!code) {
         alert("Inserisci un codice valido per la riscossione!");
@@ -404,93 +343,120 @@
       }
 
       if (!isDeposit) {
-        alert("La modalità P2P diretta non è ancora implementata. Attiva il Deposito Temporaneo per caricare i file.");
+        alert("La modalità P2P diretto non è ancora implementata in questa versione. Attiva il Deposito Temporaneo per caricare i file.");
         return;
       }
 
-      const workerUrl = getWorkerUrl();
-      if (!isWorkerConfigured(workerUrl)) {
-        alert("Prima di caricare devi configurare il Cloudflare Worker nelle Opzioni.");
-        toggleOptionsModal();
+      if (UPLOAD_API_URL.includes("INSERISCI-IL-TUO-WORKER")) {
+        alert("Prima di caricare i file devi configurare l'indirizzo del Cloudflare Worker nella costante UPLOAD_API_URL, all'inizio dello script.");
         return;
       }
 
-      const successes = [];
-      const failures = [];
+      const filesToUpload = [...selectedFilesArray];
+      const failedFiles = [];
+      const errors = [];
+      let uploadedCount = 0;
+      const queue = readQueue();
 
-      for (let i = 0; i < selectedFilesArray.length; i++) {
-        const file = selectedFilesArray[i];
-        document.getElementById('selected-file-name').innerText = `Caricamento ${i + 1}/${selectedFilesArray.length}: ${file.name}`;
+      if (startButton) startButton.disabled = true;
 
-        try {
-          const data = await uploadFileToWorker(file);
+      try {
+        for (let index = 0; index < filesToUpload.length; index++) {
+          const file = filesToUpload[index];
+          statusLabel.innerText = `Caricamento ${index + 1}/${filesToUpload.length}: ${file.name}`;
 
-          const queue = JSON.parse(localStorage.getItem('sharingportal_queue') || "[]");
-          queue.push({
-            id: data.id,
-            code: code,
-            name: file.name,
-            size: (file.size / (1024*1024)).toFixed(2) + " MB",
-            date: new Date().toLocaleDateString('it-IT'),
-            downloadUrl: data.downloadUrl || (PIXELDRAIN_DOWNLOAD_BASE + data.id),
-            provider: data.provider || ''
-          });
-          localStorage.setItem('sharingportal_queue', JSON.stringify(queue));
-          
-          successes.push(file.name);
-        } catch (err) {
-          console.error("Errore invio file:", file.name, err);
-          failures.push({ name: file.name, error: err.message || String(err) });
+          const formData = new FormData();
+          formData.append("file", file, file.name);
+
+          try {
+            const response = await fetch(UPLOAD_API_URL, {
+              method: "POST",
+              body: formData
+            });
+
+            const responseText = await response.text();
+            let data;
+            try {
+              data = responseText ? JSON.parse(responseText) : {};
+            } catch (parseError) {
+              throw new Error(`Risposta non valida dal server (HTTP ${response.status}): ${responseText.slice(0, 240)}`);
+            }
+
+            if (!response.ok) {
+              const serverMessage = data.error || data.message || data.value || responseText || `HTTP ${response.status}`;
+              throw new Error(String(serverMessage));
+            }
+
+            if (!data || !data.id) {
+              throw new Error(data.error || data.message || "Pixeldrain non ha restituito un ID file valido.");
+            }
+
+            const fileHost = ["pixeldrain.net", "pixeldra.in"].includes(String(data.host || "").toLowerCase())
+              ? String(data.host).toLowerCase()
+              : DEFAULT_FILE_HOST;
+
+            queue.push({
+              id: String(data.id),
+              host: fileHost,
+              code: code,
+              name: file.name,
+              size: (file.size / (1024 * 1024)).toFixed(2) + " MB",
+              date: new Date().toLocaleDateString('it-IT')
+            });
+            localStorage.setItem('sharingportal_queue', JSON.stringify(queue));
+            uploadedCount++;
+          } catch (err) {
+            console.error("Errore invio file:", file.name, err);
+            failedFiles.push(file);
+            errors.push(`${file.name}: ${err.message || err}`);
+          }
         }
+      } finally {
+        if (startButton) startButton.disabled = false;
       }
 
-      if (successes.length > 0) {
-        let message = `Operazione completata!\nCaricati ${successes.length}/${selectedFilesArray.length} file con codice: ${code}`;
-        if (failures.length > 0) {
-          message += '\n\nFile non riusciti:\n' + failures.map(f => `- ${f.name}: ${f.error}`).join('\n');
-        }
-        alert(message);
-        
-        document.getElementById('selected-file-name').innerText = "Nessun file selezionato";
-        document.getElementById('file-input').value = '';
-        selectedFilesArray = [];
+      // Conserva nella selezione solo i file che non sono riusciti a partire.
+      selectedFilesArray = failedFiles;
+
+      if (failedFiles.length === 0) {
+        statusLabel.innerText = "Nessun file selezionato";
+        document.getElementById('file-input').value = "";
+        alert(`Operazione completata!\nCaricati ${uploadedCount} file con codice: ${code}`);
         switchTab('queue');
       } else {
-        alert("Errore durante il caricamento nel deposito.\n\n" + failures.map(f => `- ${f.name}: ${f.error}`).join('\n'));
-        document.getElementById('selected-file-name').innerText = "Errore di invio";
+        statusLabel.innerText = `${uploadedCount} caricati; ${failedFiles.length} da riprovare.`;
+        const detail = errors.slice(0, 3).join("\n");
+        const extra = errors.length > 3 ? `\n...e altri ${errors.length - 3} errori.` : "";
+        alert(
+          uploadedCount > 0
+            ? `Caricamento parziale.\nFile caricati: ${uploadedCount}\nFile da riprovare: ${failedFiles.length}\n\nDettagli:\n${detail}${extra}`
+            : `Nessun file caricato.\n\n${detail}${extra}\n\nControlla l'indirizzo del Worker e riprova.`
+        );
+        if (uploadedCount > 0) renderQueueList();
       }
     }
 
     // LOGICA SCARICAMENTO DEPOSITO
-    function startDownloadProcess() {
+    async function startDownloadProcess() {
       const code = document.getElementById('receive-code').value.trim();
       if (!code) {
         alert("Inserisci un codice per scaricare!");
         return;
       }
 
-      const queue = JSON.parse(localStorage.getItem('sharingportal_queue') || "[]");
-      const foundItems = queue.filter(item => item.code.toLowerCase() === code.toLowerCase());
+      const queue = readQueue();
+      const found = queue.find(item => String(item.code || "").toLowerCase() === code.toLowerCase());
 
-      if (foundItems.length > 0) {
-        foundItems.forEach((item, index) => {
-          if (index === 0) {
-            window.open(getDownloadUrl(item), '_blank');
-          } else {
-            setTimeout(() => window.open(getDownloadUrl(item), '_blank'), 300 * index);
-          }
-        });
-        if (foundItems.length > 1) {
-          alert(`Trovati ${foundItems.length} file con il codice '${code}'. Apro le relative pagine di download.`);
-        }
+      if (found) {
+        window.open(`https://${getFileHost(found)}/u/${encodeURIComponent(found.id)}`, '_blank');
       } else {
-        alert(`Nessun file trovato localmente con il codice '${code}'.\n\nNota: la coda è salvata solo nel browser che ha effettuato il caricamento.`);
+        alert(`Nessun file trovato nella coda di questo browser con il codice '${code}'. La ricerca tramite codice su un altro dispositivo non è ancora implementata.`);
       }
     }
 
     // Rendering Coda Locale
     function renderQueueList() {
-      const queue = JSON.parse(localStorage.getItem('sharingportal_queue') || "[]");
+      const queue = readQueue();
       const listContainer = document.getElementById('queue-list');
       const countLabel = document.getElementById('queue-count');
 
@@ -508,12 +474,12 @@
               <i data-lucide="file-check" class="w-5 h-5"></i>
             </div>
             <div class="truncate">
-              <p class="text-sm font-medium text-slate-200 truncate">${item.name}</p>
-              <p class="text-xs text-slate-500">Codice: <span class="font-mono text-brand-400 font-bold">${item.code}</span> • ${item.size}</p>
+              <p class="text-sm font-medium text-slate-200 truncate">${escapeHtml(item.name)}</p>
+              <p class="text-xs text-slate-500">Codice: <span class="font-mono text-brand-400 font-bold">${escapeHtml(item.code)}</span> • ${escapeHtml(item.size)}</p>
             </div>
           </div>
           <div class="flex items-center gap-2">
-            <a href="${getDownloadUrl(item)}" target="_blank" class="p-2 rounded-xl bg-brand-500/10 hover:bg-brand-500/20 text-brand-400 border border-brand-500/20 transition flex-shrink-0" title="Scarica file">
+            <a href="https://${getFileHost(item)}/u/${encodeURIComponent(item.id)}" target="_blank" class="p-2 rounded-xl bg-brand-500/10 hover:bg-brand-500/20 text-brand-400 border border-brand-500/20 transition flex-shrink-0" title="Scarica file">
               <i data-lucide="download" class="w-4 h-4"></i>
             </a>
             <button onclick="removeFromQueue(${index})" class="p-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition flex-shrink-0" title="Elimina dal deposito">
@@ -528,7 +494,7 @@
 
     // Eliminazione file dalla coda
     function removeFromQueue(index) {
-      const queue = JSON.parse(localStorage.getItem('sharingportal_queue') || "[]");
+      const queue = readQueue();
       queue.splice(index, 1);
       localStorage.setItem('sharingportal_queue', JSON.stringify(queue));
       renderQueueList();
