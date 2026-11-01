@@ -43,6 +43,9 @@ A valid code provides access to the public Dropbox links associated with that co
 - Support large files through Dropbox upload sessions.
 - Preserve original filenames.
 - Maintain compatibility with legacy records from version 1.5.0.
+- Application icons for browsers, Apple devices, and PWA installation.
+- PWA support via `site.webmanifest`.
+- Donation links (Ko-fi, PayPal) in the footer.
 
 ---
 
@@ -742,6 +745,9 @@ The following changes have been implemented in the frontend code:
 - Legacy single-file compatibility.
 - Maximum of 100 files per group.
 - Version number displayed in the footer.
+- PWA support and web manifest.
+- Custom app icons (favicon, Apple touch, PWA icons).
+- Donation links in the footer.
 
 The Worker was updated separately to version 1.6.0.
 
@@ -943,10 +949,44 @@ The user prefers complete source files ready to copy and paste.
 | Sharing-code length | 5 characters |
 | Recipient authentication | Not required |
 | File packaging | Individual files, no ZIP |
+| App Icons | `favicon.ico`, `icon-192.png`, `icon-512.png`, `apple-touch-icon.png`, `icon.svg` |
+| PWA Manifest | `site.webmanifest` |
 
 ---
 
-# 16. PROMPT FOR THE NEXT ASSISTANT
+# 16. APPLICATION ICONS AND PWA
+
+The application uses a set of custom icons based on the header logo:
+
+- Blue background (`#2563eb`).
+- White filled paper plane (not outline).
+- Rounded corners (~22%).
+- Medium padding (~15%).
+
+The following files are placed in the repository root:
+
+- `favicon.ico` (multi-size: 16, 32, 48)
+- `icon-192.png`
+- `icon-512.png`
+- `apple-touch-icon.png` (180×180)
+- `icon.svg` (vector)
+- `site.webmanifest` (PWA manifest)
+
+A local tool `icon-generator.html` was used to generate these assets from the SVG source. It does not need to be uploaded to the repository.
+
+The `<head>` of `index.html` includes the correct links for browsers, Apple devices, and PWA installation, using the `/SharingPortal/` base path.
+
+---
+
+# 17. SUPPORT THE PROJECT
+
+If you find SharingPortal useful, you can support its development via Ko-fi or PayPal.
+
+See [pay.md](pay.md) for details.
+
+---
+
+# 18. PROMPT FOR THE NEXT ASSISTANT
 
 You are continuing development of an existing project called SharingPortal.
 
@@ -966,6 +1006,8 @@ The main change from version 1.5.0 is that multiple files are now registered und
 Each file remains separate in Dropbox and can be downloaded individually.
 
 The application must preserve original filenames and support both new group records and legacy single-file records.
+
+The frontend also includes custom app icons, a `site.webmanifest` for PWA support, and a donation section in the footer.
 
 The Cloudflare Worker has already been updated to support:
 
