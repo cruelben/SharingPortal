@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#101827">
-<title>SharingPortal 1.7.4</title>
+<title>SharingPortal 1.7.5</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/lucide@latest"></script>
 
@@ -387,7 +387,7 @@ code { font-family:ui-monospace,monospace; }
 </div>
 
 <footer class="text-center text-xs muted pb-4 shrink-0">
-  SharingPortal · Versione 1.7.4 · Dropbox + Cloudflare Workers ·
+  SharingPortal · Versione 1.7.5 · Dropbox + Cloudflare Workers ·
   Non caricare contenuti riservati: il codice funziona come una chiave di accesso.
 </footer>
 
@@ -578,7 +578,6 @@ async function sha256(s){
 }
 
 async function connectDropbox(){
-  // BANNER DI ATTESA
   showLoader('Connessione a Dropbox in corso...', 'Attendere prego, verrai reindirizzato al login.');
   
   try {
@@ -595,7 +594,6 @@ async function connectDropbox(){
       token_access_type:'online', code_challenge:challenge, code_challenge_method:'S256', state, scope:SCOPES };
     Object.entries(params).forEach(([k,v])=>u.searchParams.set(k,v));
     
-    // Piccolo timeout per far vedere il loader prima del redirect
     setTimeout(() => {
       location.href=u.toString();
     }, 500);
@@ -610,6 +608,7 @@ async function handleOAuth(){
   const p=new URLSearchParams(location.search);
   const code=p.get('code');
   if(!code) return;
+  
   const state=p.get('state');
   const savedState=sessionStorage.getItem('sp_oauth_state');
   const verifier=sessionStorage.getItem('sp_pkce_verifier');
@@ -617,6 +616,7 @@ async function handleOAuth(){
 
   if(!state || state!==savedState || !verifier){
     toast('Autorizzazione non valida: riprova.');
+    hideLoader();
     return;
   }
   sessionStorage.removeItem('sp_oauth_state');
@@ -646,6 +646,8 @@ async function handleOAuth(){
   catch(e){
     console.error(e);
     toast('Errore collegamento Dropbox: '+e.message, 6000);
+  } finally {
+    hideLoader();
   }
 }
 
@@ -1181,14 +1183,21 @@ $('refreshQueue').addEventListener('click', loadQueue);
    AVVIO
 ========================================================= */
 
-handleOAuth();
+const isOAuthReturn = new URLSearchParams(location.search).has('code');
+
 lucide.createIcons();
 updateDropzoneState(); 
 updateNavTabs(); 
 
-if (!sessionStorage.getItem('sp_intended_tab') && !accessToken) {
+if (isOAuthReturn) {
+  // Maschera il layout vuoto durante il recupero del token
+  showLoader('Connessione a Dropbox in corso...', 'Recupero delle credenziali in corso, attendere...');
+  showTab('send'); 
+} else if (!sessionStorage.getItem('sp_intended_tab') && !accessToken) {
   showTab('receive');
 }
+
+handleOAuth();
 
 })();
 </script>
