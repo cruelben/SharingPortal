@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -9,7 +8,6 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/lucide@latest"></script>
 
-
 <link rel="icon" href="/SharingPortal/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="192x192" href="/SharingPortal/icon-192.png">
 <link rel="icon" type="image/png" sizes="512x512" href="/SharingPortal/icon-512.png">
@@ -18,7 +16,6 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="SharingPortal">
-
 
 <style>
 :root {
@@ -35,6 +32,7 @@ body {
   background:radial-gradient(ellipse at top,#172943 0,#0b1220 55%);
   color:var(--text);
   min-height:100vh;
+  transition: background .3s, color .3s;
 }
 .light {
   color-scheme:light;
@@ -52,11 +50,13 @@ body {
   background:var(--panel);
   border:1px solid var(--line);
   border-radius:18px;
+  transition: background .3s, border-color .3s;
 }
 .subpanel {
   background:var(--panel2);
   border:1px solid var(--line);
   border-radius:14px;
+  transition: background .3s, border-color .3s;
 }
 .muted { color:var(--muted); }
 .tab {
@@ -86,6 +86,7 @@ body {
   border:1px solid var(--line);
   color:var(--text);
 }
+.btn-secondary:hover { filter: brightness(0.95); }
 .btn:disabled {
   opacity:.45;
   cursor:not-allowed;
@@ -134,12 +135,45 @@ body {
   border:1px solid #344761;
   color:#eef5ff;
   box-shadow:0 12px 40px #0005;
+  transition: opacity .3s;
 }
 code { font-family:ui-monospace,monospace; }
+
+/* OVERLAY LOADER (Attendere prego...) */
+#globalLoader {
+  position: fixed; inset: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(11, 18, 32, 0.75);
+  backdrop-filter: blur(4px);
+  transition: opacity .3s;
+}
+#globalLoader.hidden { display: none !important; }
+.loader-box {
+  background: var(--panel);
+  padding: 24px 40px; border-radius: 16px;
+  border: 1px solid var(--line); text-align: center;
+  box-shadow: 0 10px 30px rgba(0,0,0,.5);
+}
+.spinner {
+  border: 4px solid var(--line);
+  border-top: 4px solid #3b82f6;
+  border-radius: 50%; width: 40px; height: 40px;
+  animation: spin 1s linear infinite; margin: 0 auto 16px;
+}
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 </style>
 </head>
 
 <body class="min-h-screen">
+
+<!-- OVERLAY DI ATTESA -->
+<div id="globalLoader" class="hidden">
+  <div class="loader-box">
+    <div class="spinner"></div>
+    <div class="font-bold text-lg" id="loaderText">Attendere prego...</div>
+    <div class="text-sm muted mt-2" id="loaderSub">L'operazione è in corso, non chiudere la pagina.</div>
+  </div>
+</div>
 
 <div class="max-w-5xl mx-auto px-4 py-7 md:py-10">
 
@@ -181,7 +215,7 @@ code { font-family:ui-monospace,monospace; }
 </div>
 
 <nav class="flex gap-2 p-1.5 rounded-2xl panel mb-6">
-  <button class="tab active flex-1" data-tab="send">
+  <button class="tab flex-1" data-tab="send">
     <i data-lucide="upload" class="inline w-4 h-4 mr-1"></i>Invia
   </button>
   <button class="tab flex-1" data-tab="receive">
@@ -193,7 +227,7 @@ code { font-family:ui-monospace,monospace; }
 </nav>
 
 <!-- INVIA -->
-<section id="sendView" class="space-y-5">
+<section id="sendView" class="hidden-view space-y-5">
 
   <div class="panel p-5 md:p-7">
 
@@ -335,8 +369,6 @@ code { font-family:ui-monospace,monospace; }
 
 </section>
 
-
-
 <!-- SUPPORTA IL PROGETTO -->
 <div class="panel p-5 md:p-6 mt-9 text-center">
 
@@ -380,9 +412,6 @@ code { font-family:ui-monospace,monospace; }
   Non caricare contenuti riservati: il codice funziona come una chiave di accesso.
 </footer>
 
-
-
-
 </div>
 
 <div id="toast" class="toast hidden"></div>
@@ -397,16 +426,9 @@ code { font-family:ui-monospace,monospace; }
 ========================================================= */
 
 const DROPBOX_APP_KEY = 'pjr4dcuo0wcdfpb';
-
-const REDIRECT_URI =
-  'https://cruelben.github.io/SharingPortal/';
-
-const WORKER_URL =
-  'https://sharingportal-upload.cruelben.workers.dev';
-
-const SCOPES =
-  'files.content.write sharing.write account_info.read';
-
+const REDIRECT_URI = 'https://cruelben.github.io/SharingPortal/';
+const WORKER_URL = 'https://sharingportal-upload.cruelben.workers.dev';
+const SCOPES = 'files.content.write sharing.write account_info.read';
 const CHUNK_SIZE = 8 * 1024 * 1024;
 const MAX_FILES_PER_GROUP = 100;
 
@@ -423,67 +445,43 @@ let queueItems = [];
 const $ = id => document.getElementById(id);
 
 const fmtSize = n => {
-
   if(n < 1024) return n+' B';
-
-  if(n < 1048576)
-    return (n/1024).toFixed(1)+' KB';
-
-  if(n < 1073741824)
-    return (n/1048576).toFixed(1)+' MB';
-
+  if(n < 1048576) return (n/1024).toFixed(1)+' KB';
+  if(n < 1073741824) return (n/1048576).toFixed(1)+' MB';
   return (n/1073741824).toFixed(2)+' GB';
-
 };
 
 const esc = s =>
   String(s ?? '').replace(/[&<>"']/g,c=>({
-    '&':'&amp;',
-    '<':'&lt;',
-    '>':'&gt;',
-    '"':'&quot;',
-    "'":'&#39;'
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
   }[c]));
 
 function toast(msg,ms=3600){
-
   const t=$('toast');
-
   t.textContent=msg;
   t.classList.remove('hidden');
-
   clearTimeout(toast.timer);
+  toast.timer=setTimeout(()=>t.classList.add('hidden'),ms);
+}
 
-  toast.timer=setTimeout(
-    ()=>t.classList.add('hidden'),
-    ms
-  );
+function showLoader(text, sub = '') {
+  $('loaderText').textContent = text;
+  $('loaderSub').textContent = sub;
+  $('globalLoader').classList.remove('hidden');
+}
 
+function hideLoader() {
+  $('globalLoader').classList.add('hidden');
 }
 
 function setConnected(ok,sub=''){
-
-  $('connectionDot').className =
-    'w-2.5 h-2.5 rounded-full '+
-    (ok?'bg-emerald-400':'bg-amber-400');
-
-  $('connectionTitle').textContent =
-    ok?'Dropbox collegato'+
-    (accountName?' · '+accountName:''):
-    'Dropbox non collegato';
-
-  $('connectionSub').textContent =
-    sub ||
-    (ok
-      ?'Pronto per caricare i file.'
-      :'Collega il tuo account per inviare file.');
-
+  $('connectionDot').className = 'w-2.5 h-2.5 rounded-full '+(ok?'bg-emerald-400':'bg-amber-400');
+  $('connectionTitle').textContent = ok?'Dropbox collegato'+(accountName?' · '+accountName:''):'Dropbox non collegato';
+  $('connectionSub').textContent = sub || (ok?'Pronto per caricare i file.':'Collega il tuo account per inviare file.');
   $('connectBtn').innerHTML = ok
     ?'<i data-lucide="check-circle" class="w-4 h-4"></i><span>Dropbox collegato</span>'
     :'<i data-lucide="cloud" class="w-4 h-4"></i><span>Collega Dropbox</span>';
-
   lucide.createIcons();
-
 }
 
 
@@ -492,54 +490,40 @@ function setConnected(ok,sub=''){
 ========================================================= */
 
 function showTab(tab){
-
-  document.querySelectorAll('[data-tab]')
-    .forEach(b=>{
-      b.classList.toggle(
-        'active',
-        b.dataset.tab===tab
-      );
-    });
+  document.querySelectorAll('[data-tab]').forEach(b=>{
+    b.classList.toggle('active', b.dataset.tab===tab);
+  });
 
   ['send','receive','queue'].forEach(x=>{
-    $(x+'View').classList.toggle(
-      'hidden-view',
-      x!==tab
-    );
+    $(x+'View').classList.toggle('hidden-view', x!==tab);
   });
 
+  if(tab==='queue') loadQueue();
 }
 
-document.querySelectorAll('[data-tab]')
-  .forEach(b=>{
-    b.addEventListener('click',()=>{
-      showTab(b.dataset.tab);
-
-      if(b.dataset.tab==='queue')
-        loadQueue();
-    });
+document.querySelectorAll('[data-tab]').forEach(b=>{
+  b.addEventListener('click',()=>{
+    showTab(b.dataset.tab);
   });
+});
 
 
 /* =========================================================
-   TEMA
+   TEMA (Default Chiaro)
 ========================================================= */
 
 $('themeBtn').addEventListener('click',()=>{
-
   document.body.classList.toggle('light');
-
-  localStorage.setItem(
-    'sp_theme',
-    document.body.classList.contains('light')
-      ?'light'
-      :'dark'
-  );
-
+  localStorage.setItem('sp_theme', document.body.classList.contains('light') ? 'light' : 'dark');
 });
 
-if(localStorage.getItem('sp_theme')==='light')
+// Imposta il tema chiaro di default se non c'è preferenza salvata
+const savedTheme = localStorage.getItem('sp_theme');
+if(savedTheme === 'dark') {
+  document.body.classList.remove('light');
+} else {
   document.body.classList.add('light');
+}
 
 
 /* =========================================================
@@ -547,379 +531,138 @@ if(localStorage.getItem('sp_theme')==='light')
 ========================================================= */
 
 function randomString(len=64){
-
   const a=new Uint8Array(len);
-
   crypto.getRandomValues(a);
-
-  const chars =
-    'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
-
-  return Array.from(
-    a,
-    b=>chars[b%chars.length]
-  ).join('');
-
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+  return Array.from(a, b=>chars[b%chars.length]).join('');
 }
 
 function base64url(buf){
-
-  return btoa(
-    String.fromCharCode(...new Uint8Array(buf))
-  )
-  .replace(/\+/g,'-')
-  .replace(/\//g,'_')
-  .replace(/=+$/,'');
-
+  return btoa(String.fromCharCode(...new Uint8Array(buf)))
+  .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
 }
 
 async function sha256(s){
-
-  return base64url(
-    await crypto.subtle.digest(
-      'SHA-256',
-      new TextEncoder().encode(s)
-    )
-  );
-
+  return base64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)));
 }
 
 async function connectDropbox(){
-
   const verifier=randomString(64);
   const state=randomString(24);
-
   const challenge=await sha256(verifier);
-
-  sessionStorage.setItem(
-    'sp_pkce_verifier',
-    verifier
-  );
-
-  sessionStorage.setItem(
-    'sp_oauth_state',
-    state
-  );
-
-  const u=new URL(
-    'https://www.dropbox.com/oauth2/authorize'
-  );
-
-  const params={
-
-    client_id:DROPBOX_APP_KEY,
-
-    response_type:'code',
-
-    redirect_uri:REDIRECT_URI,
-
-    token_access_type:'online',
-
-    code_challenge:challenge,
-
-    code_challenge_method:'S256',
-
-    state,
-
-    scope:SCOPES
-
-  };
-
-  Object.entries(params).forEach(([k,v])=>{
-    u.searchParams.set(k,v);
-  });
-
+  sessionStorage.setItem('sp_pkce_verifier', verifier);
+  sessionStorage.setItem('sp_oauth_state', state);
+  
+  const u=new URL('https://www.dropbox.com/oauth2/authorize');
+  const params={ client_id:DROPBOX_APP_KEY, response_type:'code', redirect_uri:REDIRECT_URI,
+    token_access_type:'online', code_challenge:challenge, code_challenge_method:'S256', state, scope:SCOPES };
+  Object.entries(params).forEach(([k,v])=>u.searchParams.set(k,v));
   location.href=u.toString();
-
 }
 
-
 async function handleOAuth(){
-
   const p=new URLSearchParams(location.search);
-
   const code=p.get('code');
-
   if(!code) return;
-
   const state=p.get('state');
-
-  const savedState=
-    sessionStorage.getItem('sp_oauth_state');
-
-  const verifier=
-    sessionStorage.getItem('sp_pkce_verifier');
-
-  history.replaceState(
-    {},
-    document.title,
-    location.pathname
-  );
+  const savedState=sessionStorage.getItem('sp_oauth_state');
+  const verifier=sessionStorage.getItem('sp_pkce_verifier');
+  history.replaceState({}, document.title, location.pathname);
 
   if(!state || state!==savedState || !verifier){
-
-    toast('Autorizzazione non valida: riprova a collegare Dropbox.');
-
+    toast('Autorizzazione non valida: riprova.');
     return;
-
   }
-
   sessionStorage.removeItem('sp_oauth_state');
   sessionStorage.removeItem('sp_pkce_verifier');
 
   try{
-
     const body=new URLSearchParams({
-
-      code,
-
-      grant_type:'authorization_code',
-
-      client_id:DROPBOX_APP_KEY,
-
-      redirect_uri:REDIRECT_URI,
-
-      code_verifier:verifier
-
+      code, grant_type:'authorization_code', client_id:DROPBOX_APP_KEY,
+      redirect_uri:REDIRECT_URI, code_verifier:verifier
     });
-
-    const r=await fetch(
-      'https://api.dropboxapi.com/oauth2/token',
-      {
-        method:'POST',
-        headers:{
-          'Content-Type':'application/x-www-form-urlencoded'
-        },
-        body
-      }
-    );
-
+    const r=await fetch('https://api.dropboxapi.com/oauth2/token', {
+      method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body
+    });
     const d=await r.json();
-
-    if(!r.ok)
-      throw new Error(
-        d.error_description ||
-        d.error ||
-        'Token Dropbox non ottenuto'
-      );
-
+    if(!r.ok) throw new Error(d.error_description || d.error || 'Token non ottenuto');
     accessToken=d.access_token;
-
     await identifyAccount();
-
-    setConnected(
-      true,
-      'Account autorizzato. Token valido per questa sessione del browser.'
-    );
-
+    setConnected(true, 'Account autorizzato. Token valido per questa sessione.');
     toast('Dropbox collegato correttamente.');
-
     loadQueue();
-
   }
   catch(e){
-
     console.error(e);
-
-    toast(
-      'Errore collegamento Dropbox: '+e.message,
-      6000
-    );
-
+    toast('Errore collegamento Dropbox: '+e.message, 6000);
   }
-
 }
-
 
 async function identifyAccount(){
-
-  const r=await fetch(
-    'https://api.dropboxapi.com/2/users/get_current_account',
-    {
-      method:'POST',
-      headers:{
-        Authorization:'Bearer '+accessToken
-      }
-    }
-  );
-
+  const r=await fetch('https://api.dropboxapi.com/2/users/get_current_account', {
+    method:'POST', headers:{ Authorization:'Bearer '+accessToken }
+  });
   const d=await r.json();
-
-  if(!r.ok)
-    throw new Error(
-      d.error_summary ||
-      'Impossibile leggere account Dropbox'
-    );
-
-  accountName=
-    d.name?.display_name ||
-    d.email ||
-    '';
-
+  if(!r.ok) throw new Error(d.error_summary || 'Impossibile leggere account Dropbox');
+  accountName = d.name?.display_name || d.email || '';
 }
 
-$('connectBtn').addEventListener(
-  'click',
-  ()=>{
-    if(!accessToken)
-      connectDropbox();
-    else
-      toast('Dropbox è già collegato in questa sessione.');
-  }
-);
+$('connectBtn').addEventListener('click', ()=>{
+  if(!accessToken) connectDropbox();
+  else toast('Dropbox è già collegato in questa sessione.');
+});
 
 
 /* =========================================================
    SELEZIONE FILE
 ========================================================= */
 
-$('browseBtn').addEventListener(
-  'click',
-  e=>{
-    e.stopPropagation();
-    $('fileInput').click();
-  }
-);
-
-$('dropzone').addEventListener(
-  'click',
-  e=>{
-    if(e.target.id!=='browseBtn')
-      $('fileInput').click();
-  }
-);
-
-$('fileInput').addEventListener(
-  'change',
-  e=>{
-    addFiles([...e.target.files]);
-    $('fileInput').value='';
-  }
-);
+$('browseBtn').addEventListener('click', e=>{ e.stopPropagation(); $('fileInput').click(); });
+$('dropzone').addEventListener('click', e=>{ if(e.target.id!=='browseBtn') $('fileInput').click(); });
+$('fileInput').addEventListener('change', e=>{ addFiles([...e.target.files]); $('fileInput').value=''; });
 
 ['dragenter','dragover'].forEach(ev=>{
-
-  $('dropzone').addEventListener(ev,e=>{
-
-    e.preventDefault();
-
-    $('dropzone').classList.add('drag');
-
-  });
-
+  $('dropzone').addEventListener(ev,e=>{ e.preventDefault(); $('dropzone').classList.add('drag'); });
 });
-
 ['dragleave','drop'].forEach(ev=>{
-
-  $('dropzone').addEventListener(ev,e=>{
-
-    e.preventDefault();
-
-    $('dropzone').classList.remove('drag');
-
-  });
-
+  $('dropzone').addEventListener(ev,e=>{ e.preventDefault(); $('dropzone').classList.remove('drag'); });
 });
-
-$('dropzone').addEventListener(
-  'drop',
-  e=>addFiles([...e.dataTransfer.files])
-);
-
+$('dropzone').addEventListener('drop', e=>addFiles([...e.dataTransfer.files]));
 
 function addFiles(files){
-
   if(!files.length) return;
-
   if(selectedFiles.length+files.length>MAX_FILES_PER_GROUP){
-
-    toast('Puoi selezionare al massimo '+MAX_FILES_PER_GROUP+' file per gruppo.');
-
+    toast('Massimo '+MAX_FILES_PER_GROUP+' file per gruppo.');
     return;
-
   }
-
   selectedFiles.push(...files);
-
   renderSelected();
-
 }
-
 
 function renderSelected(){
-
-  $('selectedWrap').classList.toggle(
-    'hidden',
-    !selectedFiles.length
-  );
-
-  $('fileCount').textContent=
-    '('+selectedFiles.length+')';
-
-  $('selectedFiles').innerHTML=
-    selectedFiles.map((f,i)=>`
-
-      <div class="subpanel p-3 flex items-center gap-3">
-
-        <div class="w-9 h-9 rounded-xl bg-blue-500/15 text-blue-400 flex items-center justify-center">
-          <i data-lucide="file" class="w-4 h-4"></i>
-        </div>
-
-        <div class="min-w-0 flex-1">
-
-          <div class="font-medium text-sm truncate">
-            ${esc(f.name)}
-          </div>
-
-          <div class="text-xs muted">
-            ${fmtSize(f.size)}
-          </div>
-
-        </div>
-
-        <button
-          class="text-red-400 p-2"
-          data-remove="${i}"
-          aria-label="Rimuovi"
-        >
-          <i data-lucide="x" class="w-4 h-4"></i>
-        </button>
-
+  $('selectedWrap').classList.toggle('hidden', !selectedFiles.length);
+  $('fileCount').textContent='('+selectedFiles.length+')';
+  $('selectedFiles').innerHTML=selectedFiles.map((f,i)=>`
+    <div class="subpanel p-3 flex items-center gap-3">
+      <div class="w-9 h-9 rounded-xl bg-blue-500/15 text-blue-400 flex items-center justify-center">
+        <i data-lucide="file" class="w-4 h-4"></i>
       </div>
-
-    `).join('');
-
-  $('selectedFiles')
-    .querySelectorAll('[data-remove]')
-    .forEach(b=>{
-
-      b.addEventListener('click',()=>{
-
-        selectedFiles.splice(
-          Number(b.dataset.remove),
-          1
-        );
-
-        renderSelected();
-
-      });
-
-    });
-
+      <div class="min-w-0 flex-1">
+        <div class="font-medium text-sm truncate">${esc(f.name)}</div>
+        <div class="text-xs muted">${fmtSize(f.size)}</div>
+      </div>
+      <button class="text-red-400 p-2" data-remove="${i}" aria-label="Rimuovi">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+  `).join('');
+  $('selectedFiles').querySelectorAll('[data-remove]').forEach(b=>{
+    b.addEventListener('click',()=>{ selectedFiles.splice(Number(b.dataset.remove), 1); renderSelected(); });
+  });
   lucide.createIcons();
-
 }
 
-
-$('clearFiles').addEventListener('click',()=>{
-
-  selectedFiles=[];
-
-  $('fileInput').value='';
-
-  renderSelected();
-
-});
+$('clearFiles').addEventListener('click',()=>{ selectedFiles=[]; $('fileInput').value=''; renderSelected(); });
 
 
 /* =========================================================
@@ -927,16 +670,10 @@ $('clearFiles').addEventListener('click',()=>{
 ========================================================= */
 
 function randomCode(){
-
   const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-
   let s='';
-
-  for(let i=0;i<5;i++)
-    s+=chars[Math.floor(Math.random()*chars.length)];
-
+  for(let i=0;i<5;i++) s+=chars[Math.floor(Math.random()*chars.length)];
   return s;
-
 }
 
 
@@ -945,18 +682,11 @@ function randomCode(){
 ========================================================= */
 
 function setProgress(p,text,detail=''){
-
   $('uploadStatus').classList.remove('hidden');
-
   $('uploadProgress').style.width=p+'%';
-
-  $('uploadPercent').textContent=
-    Math.round(p)+'%';
-
+  $('uploadPercent').textContent= Math.round(p)+'%';
   $('uploadStatusText').textContent=text;
-
   $('uploadDetails').textContent=detail;
-
 }
 
 
@@ -965,275 +695,99 @@ function setProgress(p,text,detail=''){
 ========================================================= */
 
 async function dropboxRequest(endpoint,args){
-
-  const r=await fetch(
-    'https://api.dropboxapi.com/2/'+endpoint,
-    {
-      method:'POST',
-      headers:{
-        Authorization:'Bearer '+accessToken,
-        'Content-Type':'application/json'
-      },
-      body:JSON.stringify(args||{})
-    }
-  );
-
+  const r=await fetch('https://api.dropboxapi.com/2/'+endpoint, {
+    method:'POST', headers:{ Authorization:'Bearer '+accessToken, 'Content-Type':'application/json' },
+    body:JSON.stringify(args||{})
+  });
   const d=await r.json().catch(()=>({}));
-
-  if(!r.ok)
-    throw new Error(
-      d.error_summary ||
-      d.error?.['.tag'] ||
-      'Errore Dropbox'
-    );
-
+  if(!r.ok) throw new Error(d.error_summary || d.error?.['.tag'] || 'Errore Dropbox');
   return d;
-
 }
-
-
-/* =========================================================
-   CREAZIONE CARTELLE DROPBOX
-========================================================= */
 
 async function createDropboxFolder(path){
-
-  return await dropboxRequest(
-    'files/create_folder_v2',
-    {
-      path,
-      autorename:false
-    }
-  );
-
+  return await dropboxRequest('files/create_folder_v2', { path, autorename:false });
 }
-
-
-/* =========================================================
-   ELIMINAZIONE CARTELLA DROPBOX
-========================================================= */
 
 async function deleteDropboxFolder(path){
-
   if(!path) return;
-
-  try{
-
-    await dropboxRequest(
-      'files/delete_v2',
-      {path}
-    );
-
-  }
-  catch(e){
-
-    console.warn(
-      'Pulizia cartella Dropbox non riuscita:',
-      e.message
-    );
-
-  }
-
+  try { await dropboxRequest('files/delete_v2', {path}); }
+  catch(e){ console.warn('Pulizia fallita:', e.message); }
 }
-
-
-/* =========================================================
-   UPLOAD FILE SINGOLO
-========================================================= */
 
 async function uploadSmall(file,path){
-
-  const r=await fetch(
-    'https://content.dropboxapi.com/2/files/upload',
-    {
-      method:'POST',
-      headers:{
-        Authorization:'Bearer '+accessToken,
-        'Content-Type':'application/octet-stream',
-        'Dropbox-API-Arg':JSON.stringify({
-          path,
-          mode:'add',
-          autorename:false,
-          mute:false
-        })
-      },
-      body:file
-    }
-  );
-
+  const r=await fetch('https://content.dropboxapi.com/2/files/upload', {
+    method:'POST', headers:{
+      Authorization:'Bearer '+accessToken, 'Content-Type':'application/octet-stream',
+      'Dropbox-API-Arg':JSON.stringify({ path, mode:'add', autorename:false, mute:false })
+    },
+    body:file
+  });
   const d=await r.json().catch(()=>({}));
-
-  if(!r.ok)
-    throw new Error(
-      d.error_summary ||
-      'Errore upload Dropbox'
-    );
-
+  if(!r.ok) throw new Error(d.error_summary || 'Errore upload Dropbox');
   return d;
-
 }
 
-
-/* =========================================================
-   UPLOAD FILE GRANDI A BLOCCHI
-========================================================= */
-
 async function uploadLarge(file,path,onProgress){
-
-  const start=await fetch(
-    'https://content.dropboxapi.com/2/files/upload_session/start',
-    {
-      method:'POST',
-      headers:{
-        Authorization:'Bearer '+accessToken,
-        'Content-Type':'application/octet-stream',
-        'Dropbox-API-Arg':JSON.stringify({
-          close:false
-        })
-      },
-      body:file.slice(0,CHUNK_SIZE)
-    }
-  );
-
+  const start=await fetch('https://content.dropboxapi.com/2/files/upload_session/start', {
+    method:'POST', headers:{
+      Authorization:'Bearer '+accessToken, 'Content-Type':'application/octet-stream',
+      'Dropbox-API-Arg':JSON.stringify({ close:false })
+    },
+    body:file.slice(0,CHUNK_SIZE)
+  });
   let d=await start.json().catch(()=>({}));
-
-  if(!start.ok)
-    throw new Error(
-      d.error_summary ||
-      'Avvio upload non riuscito'
-    );
-
+  if(!start.ok) throw new Error(d.error_summary || 'Avvio fallito');
   const session=d.session_id;
-
   let offset=Math.min(CHUNK_SIZE,file.size);
 
   while(offset<file.size){
-
-    const end=Math.min(
-      offset+CHUNK_SIZE,
-      file.size
-    );
-
+    const end=Math.min(offset+CHUNK_SIZE,file.size);
     const last=end===file.size;
-
     if(last){
-
-      const r=await fetch(
-        'https://content.dropboxapi.com/2/files/upload_session/finish',
-        {
-          method:'POST',
-          headers:{
-            Authorization:'Bearer '+accessToken,
-            'Content-Type':'application/octet-stream',
-            'Dropbox-API-Arg':JSON.stringify({
-              cursor:{
-                session_id:session,
-                offset
-              },
-              commit:{
-                path,
-                mode:'add',
-                autorename:false,
-                mute:false
-              }
-            })
-          },
-          body:file.slice(offset,end)
-        }
-      );
-
+      const r=await fetch('https://content.dropboxapi.com/2/files/upload_session/finish', {
+        method:'POST', headers:{
+          Authorization:'Bearer '+accessToken, 'Content-Type':'application/octet-stream',
+          'Dropbox-API-Arg':JSON.stringify({
+            cursor:{ session_id:session, offset },
+            commit:{ path, mode:'add', autorename:false, mute:false }
+          })
+        },
+        body:file.slice(offset,end)
+      });
       d=await r.json().catch(()=>({}));
-
-      if(!r.ok)
-        throw new Error(
-          d.error_summary ||
-          'Chiusura upload non riuscita'
-        );
-
+      if(!r.ok) throw new Error(d.error_summary || 'Chiusura fallita');
     }
     else{
-
-      const r=await fetch(
-        'https://content.dropboxapi.com/2/files/upload_session/append_v2',
-        {
-          method:'POST',
-          headers:{
-            Authorization:'Bearer '+accessToken,
-            'Content-Type':'application/octet-stream',
-            'Dropbox-API-Arg':JSON.stringify({
-              cursor:{
-                session_id:session,
-                offset
-              },
-              close:false
-            })
-          },
-          body:file.slice(offset,end)
-        }
-      );
-
+      const r=await fetch('https://content.dropboxapi.com/2/files/upload_session/append_v2', {
+        method:'POST', headers:{
+          Authorization:'Bearer '+accessToken, 'Content-Type':'application/octet-stream',
+          'Dropbox-API-Arg':JSON.stringify({ cursor:{ session_id:session, offset }, close:false })
+        },
+        body:file.slice(offset,end)
+      });
       if(!r.ok){
-
         const x=await r.json().catch(()=>({}));
-
-        throw new Error(
-          x.error_summary ||
-          'Upload interrotto'
-        );
-
+        throw new Error(x.error_summary || 'Upload interrotto');
       }
-
     }
-
     offset=end;
-
     onProgress(offset/file.size);
-
   }
-
   return d;
-
 }
 
-
-/* =========================================================
-   CREAZIONE LINK CONDIVISO
-========================================================= */
-
 async function createSharedLink(path){
-
   try{
-
-    return await dropboxRequest(
-      'sharing/create_shared_link_with_settings',
-      {
-        path,
-        settings:{
-          requested_visibility:{
-            '.tag':'public'
-          },
-          audience:{
-            '.tag':'public'
-          },
-          access:{
-            '.tag':'viewer'
-          },
-          allow_download:true
-        }
+    return await dropboxRequest('sharing/create_shared_link_with_settings', {
+      path, settings:{
+        requested_visibility:{'.tag':'public'}, audience:{'.tag':'public'},
+        access:{'.tag':'viewer'}, allow_download:true
       }
-    );
-
+    });
   }
   catch(e){
-
-    throw new Error(
-      'File caricato, ma creazione link Dropbox non riuscita: '+
-      e.message+
-      ' (controlla il permesso sharing.write).'
-    );
-
+    throw new Error('Link Dropbox fallito: '+e.message+' (manca permesso sharing.write?)');
   }
-
 }
 
 
@@ -1241,69 +795,22 @@ async function createSharedLink(path){
    COMUNICAZIONE CON WORKER CLOUDFLARE
 ========================================================= */
 
-async function workerCall(
-  path,
-  {
-    method='GET',
-    body=null,
-    auth=false
-  }={}
-){
-
-  const headers={
-    'Content-Type':'application/json'
-  };
-
+async function workerCall(path, { method='GET', body=null, auth=false }={}){
+  const headers={ 'Content-Type':'application/json' };
   if(auth){
-
-    if(!accessToken)
-      throw new Error('Collega prima Dropbox.');
-
-    headers.Authorization=
-      'Bearer '+accessToken;
-
+    if(!accessToken) throw new Error('Collega prima Dropbox.');
+    headers.Authorization='Bearer '+accessToken;
   }
-
-  const r=await fetch(
-    WORKER_URL+path,
-    {
-      method,
-      headers,
-      body:body
-        ?JSON.stringify(body)
-        :undefined
-    }
-  );
-
+  const r=await fetch(WORKER_URL+path, { method, headers, body:body?JSON.stringify(body):undefined });
   const d=await r.json().catch(()=>({}));
-
-  if(!r.ok)
-    throw new Error(
-      d.error ||
-      d.message ||
-      `Worker: HTTP ${r.status}`
-    );
-
+  if(!r.ok) throw new Error(d.error || d.message || `Worker HTTP ${r.status}`);
   return d;
-
 }
 
-
-/* =========================================================
-   NOME FILE PER DROPBOX
-   File.name è già il nome originale del file selezionato.
-   La cartella numerata evita conflitti tra nomi duplicati.
-========================================================= */
-
 function getDropboxFileName(file){
-
   const name=String(file.name||'file');
-
-  if(!name || name==='.' || name==='..')
-    return 'file';
-
+  if(!name || name==='.' || name==='..') return 'file';
   return name.replace(/[\/\\]/g,'_');
-
 }
 
 
@@ -1311,677 +818,295 @@ function getDropboxFileName(file){
    PROCEDURA INVIO GRUPPO
 ========================================================= */
 
-$('uploadBtn').addEventListener(
-  'click',
-  async()=>{
-
-    if(!accessToken){
-
-      toast('Prima collega Dropbox.');
-
-      return;
-
-    }
-
-    if(!selectedFiles.length)
-      return;
-
-    if(selectedFiles.length>MAX_FILES_PER_GROUP){
-
-      toast('Troppi file: massimo '+MAX_FILES_PER_GROUP+'.');
-
-      return;
-
-    }
-
-    $('uploadBtn').disabled=true;
-
-    $('newCodes').classList.add('hidden');
-
-    $('newCodesList').innerHTML='';
-
-    const filesToUpload=[...selectedFiles];
-
-    const total=filesToUpload.reduce(
-      (s,f)=>s+f.size,
-      0
-    );
-
-    let completed=0;
-    let folderPath='';
-    let folderCreated=false;
-    let registered=false;
-
-    const groupFiles=[];
-
-    try{
-
-      /* -------------------------------------------------
-         1. CREAZIONE CARTELLA PRINCIPALE
-      ------------------------------------------------- */
-
-      folderPath=
-        '/SharingPortal_'+
-        Date.now()+'_ '+
-        crypto.randomUUID().replace(/-/g,'');
-
-      folderPath=folderPath.replace('_ ','_');
-
-      setProgress(
-        0,
-        'Preparazione del gruppo...',
-        filesToUpload.length+' file · '+fmtSize(total)
-      );
-
-      await createDropboxFolder(folderPath);
-
-      folderCreated=true;
-
-
-      /* -------------------------------------------------
-         2. UPLOAD DEI FILE
-      ------------------------------------------------- */
-
-      for(let i=0;i<filesToUpload.length;i++){
-
-        const file=filesToUpload[i];
-
-        const fileNumber=String(i+1).padStart(3,'0');
-
-        const fileFolder=
-          folderPath+'/'+fileNumber;
-
-        const safeName=getDropboxFileName(file);
-
-        const path=
-          fileFolder+'/'+safeName;
-
-
-        /* Ogni file ha una propria sottocartella.
-           In questo modo sono ammessi anche nomi duplicati. */
-
-        await createDropboxFolder(fileFolder);
-
-
-        setProgress(
-          total?completed/total*100:0,
-          `Caricamento ${i+1}/${filesToUpload.length}: ${file.name}`,
-          fmtSize(file.size)
-        );
-
-
-        const onProgress=part=>{
-
-          setProgress(
-            total
-              ?(completed+part*file.size)/total*100
-              :100,
-            `Caricamento ${i+1}/${filesToUpload.length}: ${file.name}`,
-            fmtSize(file.size)
-          );
-
-        };
-
-
-        if(file.size<=150*1024*1024){
-
-          await uploadSmall(file,path);
-
-        }
-        else{
-
-          await uploadLarge(
-            file,
-            path,
-            onProgress
-          );
-
-        }
-
-
-        completed+=file.size;
-
-        setProgress(
-          total?completed/total*100:100,
-          `Creazione link ${i+1}/${filesToUpload.length}...`,
-          file.name
-        );
-
-
-        const shared=await createSharedLink(path);
-
-        const link=shared.url;
-
-        if(!link)
-          throw new Error(
-            'Dropbox non ha restituito il link per '+file.name
-          );
-
-
-        groupFiles.push({
-
-          name:file.name,
-
-          size:file.size,
-
-          link,
-
-          path
-
-        });
-
-      }
-
-
-      /* -------------------------------------------------
-         3. REGISTRAZIONE UNICO CODICE NEL WORKER
-      ------------------------------------------------- */
-
-      setProgress(
-        98,
-        'Registrazione del gruppo...',
-        filesToUpload.length+' file pronti'
-      );
-
-      const code=randomCode();
-
-      const groupRecord={
-
-        code,
-
-        folderPath,
-
-        files:groupFiles,
-
-        createdAt:new Date().toISOString()
-
+$('uploadBtn').addEventListener('click', async()=>{
+  if(!accessToken){ toast('Prima collega Dropbox.'); return; }
+  if(!selectedFiles.length) return;
+  if(selectedFiles.length>MAX_FILES_PER_GROUP){ toast('Max '+MAX_FILES_PER_GROUP+' file.'); return; }
+
+  $('uploadBtn').disabled=true;
+  $('newCodes').classList.add('hidden');
+  $('newCodesList').innerHTML='';
+  
+  // MOSTRA BANNER DI ATTESA
+  showLoader('Attendere prego...', 'Caricamento dei file in corso, non chiudere la pagina.');
+  
+  const filesToUpload=[...selectedFiles];
+  const total=filesToUpload.reduce((s,f)=>s+f.size,0);
+  let completed=0;
+  let folderPath='';
+  let folderCreated=false;
+  let registered=false;
+  const groupFiles=[];
+
+  try{
+    folderPath='/SharingPortal_'+Date.now()+'_ '+crypto.randomUUID().replace(/-/g,'');
+    folderPath=folderPath.replace('_ ','_');
+    
+    setProgress(0, 'Preparazione del gruppo...', filesToUpload.length+' file · '+fmtSize(total));
+    await createDropboxFolder(folderPath);
+    folderCreated=true;
+
+    for(let i=0;i<filesToUpload.length;i++){
+      const file=filesToUpload[i];
+      const fileNumber=String(i+1).padStart(3,'0');
+      const fileFolder=folderPath+'/'+fileNumber;
+      const safeName=getDropboxFileName(file);
+      const path=fileFolder+'/'+safeName;
+
+      await createDropboxFolder(fileFolder);
+      setProgress(total?completed/total*100:0, `Caricamento ${i+1}/${filesToUpload.length}: ${file.name}`, fmtSize(file.size));
+
+      const onProgress=part=>{
+        setProgress(total?(completed+part*file.size)/total*100:100, `Caricamento ${i+1}/${filesToUpload.length}: ${file.name}`, fmtSize(file.size));
       };
 
+      if(file.size<=150*1024*1024) await uploadSmall(file,path);
+      else await uploadLarge(file,path,onProgress);
 
-      await workerCall(
-        '/api/register-group',
-        {
-          method:'POST',
-          body:groupRecord,
-          auth:true
-        }
-      );
+      completed+=file.size;
+      setProgress(total?completed/total*100:100, `Creazione link ${i+1}/${filesToUpload.length}...`, file.name);
 
-      registered=true;
+      const shared=await createSharedLink(path);
+      if(!shared.url) throw new Error('Dropbox non ha restituito il link per '+file.name);
 
+      groupFiles.push({ name:file.name, size:file.size, link:shared.url, path });
+    }
 
-      /* -------------------------------------------------
-         4. VISUALIZZAZIONE CODICE UNICO
-      ------------------------------------------------- */
+    setProgress(98, 'Registrazione del gruppo...', filesToUpload.length+' file pronti');
+    const code=randomCode();
+    const groupRecord={ code, folderPath, files:groupFiles, createdAt:new Date().toISOString() };
 
-      const totalSize=groupFiles.reduce(
-        (s,f)=>s+Number(f.size||0),
-        0
-      );
+    await workerCall('/api/register-group', { method:'POST', body:groupRecord, auth:true });
+    registered=true;
 
-      $('newCodesList').innerHTML=`
+    const totalSize=groupFiles.reduce((s,f)=>s+Number(f.size||0),0);
 
-        <div class="subpanel p-5">
-
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-
-            <div class="min-w-0">
-
-              <div class="text-sm muted">
-                CODICE DEL GRUPPO
-              </div>
-
-              <div class="text-3xl font-black tracking-[.25em] text-blue-400 mt-1">
-                ${esc(code)}
-              </div>
-
-              <div class="text-sm muted mt-2">
-                ${groupFiles.length} file · ${fmtSize(totalSize)}
-              </div>
-
-            </div>
-
-            <button
-              id="copyGroupCode"
-              class="btn btn-primary whitespace-nowrap"
-            >
-              <i data-lucide="copy" class="inline w-4 h-4 mr-1"></i>
-              Copia codice
-            </button>
-
+    $('newCodesList').innerHTML=`
+      <div class="subpanel p-5">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div class="min-w-0">
+            <div class="text-sm muted">CODICE DEL GRUPPO</div>
+            <div class="text-3xl font-black tracking-[.25em] text-blue-400 mt-1">${esc(code)}</div>
+            <div class="text-sm muted mt-2">${groupFiles.length} file · ${fmtSize(totalSize)}</div>
           </div>
-
-          <div class="border-t border-slate-500/20 mt-4 pt-4">
-
-            <div class="text-sm font-semibold mb-3">
-              File inclusi nel gruppo
-            </div>
-
-            <div class="space-y-2">
-
-              ${groupFiles.map(f=>`
-
-                <div class="flex items-center justify-between gap-3 text-sm">
-
-                  <div class="min-w-0 flex items-center gap-2">
-
-                    <i data-lucide="file" class="w-4 h-4 muted shrink-0"></i>
-
-                    <span class="truncate">${esc(f.name)}</span>
-
-                  </div>
-
-                  <span class="text-xs muted whitespace-nowrap">
-                    ${fmtSize(f.size)}
-                  </span>
-
-                </div>
-
-              `).join('')}
-
-            </div>
-
-          </div>
-
+          <button id="copyGroupCode" class="btn btn-primary whitespace-nowrap">
+            <i data-lucide="copy" class="inline w-4 h-4 mr-1"></i> Copia codice
+          </button>
         </div>
+        <div class="border-t border-slate-500/20 mt-4 pt-4">
+          <div class="text-sm font-semibold mb-3">File inclusi nel gruppo</div>
+          <div class="space-y-2">
+            ${groupFiles.map(f=>`
+              <div class="flex items-center justify-between gap-3 text-sm">
+                <div class="min-w-0 flex items-center gap-2">
+                  <i data-lucide="file" class="w-4 h-4 muted shrink-0"></i>
+                  <span class="truncate">${esc(f.name)}</span>
+                </div>
+                <span class="text-xs muted whitespace-nowrap">${fmtSize(f.size)}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+    `;
 
-      `;
+    $('copyGroupCode').addEventListener('click',()=>{
+      navigator.clipboard.writeText(code).then(()=>toast('Codice copiato.')).catch(()=>toast('Copia fallita.'));
+    });
 
-
-      $('copyGroupCode').addEventListener('click',()=>{
-
-        navigator.clipboard.writeText(code)
-          .then(()=>toast('Codice del gruppo copiato.'))
-          .catch(()=>toast('Copia non disponibile.'));
-
-      });
-
-
-      lucide.createIcons();
-
-      $('newCodes').classList.remove('hidden');
-
-      setProgress(
-        100,
-        'Completato',
-        'Gruppo registrato: '+groupFiles.length+' file con un unico codice.'
-      );
-
-
-      selectedFiles=[];
-
-      $('fileInput').value='';
-
-      renderSelected();
-
-      toast('Gruppo inviato correttamente.');
-
-      loadQueue();
-
-    }
-    catch(e){
-
-      console.error(e);
-
-      /* Se il gruppo non è stato registrato,
-         proviamo a eliminare la cartella incompleta. */
-
-      if(folderCreated && !registered){
-
-        setProgress(
-          completed/Math.max(total,1)*100,
-          'Pulizia del caricamento incompleto...',
-          e.message
-        );
-
-        await deleteDropboxFolder(folderPath);
-
-      }
-
-
-      setProgress(
-        completed/Math.max(total,1)*100,
-        'Operazione interrotta',
-        e.message
-      );
-
-      toast(e.message,6500);
-
-    }
-    finally{
-
-      $('uploadBtn').disabled=false;
-
-    }
+    lucide.createIcons();
+    $('newCodes').classList.remove('hidden');
+    setProgress(100, 'Completato', 'Gruppo registrato.');
+    selectedFiles=[]; $('fileInput').value='';
+    renderSelected();
+    toast('Gruppo inviato correttamente.');
+    loadQueue();
 
   }
-);
+  catch(e){
+    console.error(e);
+    if(folderCreated && !registered){
+      setProgress(completed/Math.max(total,1)*100, 'Pulizia caricamento...', e.message);
+      await deleteDropboxFolder(folderPath);
+    }
+    setProgress(completed/Math.max(total,1)*100, 'Operazione interrotta', e.message);
+    toast(e.message,6500);
+  }
+  finally{
+    $('uploadBtn').disabled=false;
+    hideLoader(); // NASCONDE IL BANNER
+  }
+});
 
 
 /* =========================================================
-   RICERCA CODICE
+   RICERCA CODICE E SCARICA TUTTO
 ========================================================= */
 
-$('redeemForm').addEventListener(
-  'submit',
-  async e=>{
+$('redeemForm').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const code=$('redeemCode').value.trim().toUpperCase();
+  if(!code) return;
 
-    e.preventDefault();
+  $('redeemResult').innerHTML='<div class="muted text-sm">Ricerca in corso...</div>';
 
-    const code=$('redeemCode')
-      .value
-      .trim()
-      .toUpperCase();
+  try{
+    const d=await workerCall('/api/redeem?code='+encodeURIComponent(code));
+    const items=d.items || (d.item?[d.item]:[]);
 
-    if(!code) return;
+    if(!items.length){
+      $('redeemResult').innerHTML='<div class="subpanel p-4 text-sm muted">Nessun file trovato per questo codice.</div>';
+      return;
+    }
 
-    $('redeemResult').innerHTML=
-      '<div class="muted text-sm">Ricerca in corso...</div>';
+    // Genera il tasto "Scarica Tutto" se ci sono più file
+    const downloadAllBtn = items.length > 1 ? `
+      <button id="downloadAllBtn" class="btn btn-secondary w-full mb-4 flex items-center justify-center gap-2">
+        <i data-lucide="download-cloud" class="w-4 h-4"></i>
+        Scarica tutti i file (${items.length})
+      </button>
+    ` : '';
 
-    try{
-
-      const d=await workerCall(
-        '/api/redeem?code='+encodeURIComponent(code)
-      );
-
-      const items=
-        d.items ||
-        (d.item?[d.item]:[]);
-
-      if(!items.length){
-
-        $('redeemResult').innerHTML=`
-          <div class="subpanel p-4 text-sm muted">
-            Nessun file trovato per questo codice.
-          </div>
-        `;
-
-        return;
-
-      }
-
-      $('redeemResult').innerHTML=`
-
-        <div class="mb-3 text-sm muted">
-          ${items.length} ${items.length===1?'file trovato':'file trovati'}.
-          Puoi scaricarli singolarmente.
-        </div>
-
-        <div class="space-y-2">
-
-          ${items.map(x=>`
-
-            <div class="subpanel p-4 flex flex-col sm:flex-row sm:items-center gap-3">
-
-              <div class="flex-1 min-w-0">
-
-                <div class="font-semibold break-words">
-                  ${esc(x.name||'File condiviso')}
-                </div>
-
-                <div class="text-xs muted mt-1">
-                  ${x.size!==undefined?fmtSize(Number(x.size)||0):''}
-                </div>
-
+    $('redeemResult').innerHTML=`
+      <div class="mb-3 text-sm muted">
+        ${items.length} ${items.length===1?'file trovato':'file trovati'}.
+        Puoi scaricarli singolarmente o tutti insieme.
+      </div>
+      ${downloadAllBtn}
+      <div class="space-y-2">
+        ${items.map(x=>`
+          <div class="subpanel p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+            <div class="flex-1 min-w-0">
+              <div class="font-semibold break-words">${esc(x.name||'File condiviso')}</div>
+              <div class="text-xs muted mt-1">
+                ${x.size!==undefined?fmtSize(Number(x.size)||0):''}
               </div>
-
-              <a
-                class="btn btn-primary text-center"
-                href="${esc(x.link)}"
-                target="_blank"
-                rel="noopener"
-              >
-                <i data-lucide="download" class="inline w-4 h-4 mr-1"></i>
-                Scarica file
-              </a>
-
             </div>
+            <a class="btn btn-primary text-center download-link" href="${esc(x.link)}" target="_blank" rel="noopener">
+              <i data-lucide="download" class="inline w-4 h-4 mr-1"></i> Scarica
+            </a>
+          </div>
+        `).join('')}
+      </div>
+    `;
 
-          `).join('')}
+    lucide.createIcons();
 
-        </div>
-
-      `;
-
-      lucide.createIcons();
-
-    }
-    catch(err){
-
-      $('redeemResult').innerHTML=`
-        <div class="subpanel p-4 text-sm text-red-400">
-          ${esc(err.message)}
-        </div>
-      `;
-
+    // Gestione "Scarica Tutto" con delay per evitare il blocco dei popup del browser
+    if (items.length > 1) {
+      $('downloadAllBtn').addEventListener('click', () => {
+        const links = document.querySelectorAll('.download-link');
+        links.forEach((link, index) => {
+          setTimeout(() => {
+            // Apre in una nuova scheda per forzare il download senza far perdere il focus all'utente
+            window.open(link.href, '_blank');
+          }, index * 800); // 800ms di distanza tra un download e l'altro
+        });
+        toast('Download multipli avviati. Controlla le schede o i download del browser.', 5000);
+      });
     }
 
   }
-);
-
-
-$('redeemCode').addEventListener(
-  'input',
-  e=>{
-    e.target.value=e.target.value
-      .toUpperCase()
-      .replace(/[^A-Z0-9]/g,'');
+  catch(err){
+    $('redeemResult').innerHTML=`<div class="subpanel p-4 text-sm text-red-400">${esc(err.message)}</div>`;
   }
-);
+});
+
+$('redeemCode').addEventListener('input', e=>{
+  e.target.value=e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,'');
+});
 
 
 /* =========================================================
-   CODA PERSONALE
+   CODA PERSONALE (Con contatore download)
 ========================================================= */
 
 async function loadQueue(){
-
   if(!accessToken){
-
-    $('queueInfo').textContent=
-      'Collega Dropbox per visualizzare i tuoi invii.';
-
+    $('queueInfo').textContent='Collega Dropbox per visualizzare i tuoi invii.';
     $('queueList').innerHTML='';
-
     return;
-
   }
 
   $('queueInfo').textContent='Caricamento...';
 
   try{
-
-    const d=await workerCall(
-      '/api/list',
-      {auth:true}
-    );
-
+    const d=await workerCall('/api/list', {auth:true});
     queueItems=d.items||[];
 
-    $('queueInfo').textContent=
-      queueItems.length
-        ?`${queueItems.length} invii registrati.`
-        :'Non ci sono invii registrati.';
+    $('queueInfo').textContent = queueItems.length ? `${queueItems.length} invii registrati.` : 'Non ci sono invii registrati.';
 
-
-    $('queueList').innerHTML=
-      queueItems.map(x=>{
-
-        const isGroup=
-          Array.isArray(x.files);
-
-        const files=isGroup?x.files:[];
-
-        const totalSize=isGroup
-          ?files.reduce(
-              (s,f)=>s+Number(f.size||0),
-              0
-            )
-          :Number(x.size||0);
-
-        const displayName=isGroup
-          ?'Gruppo di '+files.length+' file'
-          :(x.name||'File');
-
-        const fileDetails=isGroup
-          ?files.map(f=>`
-
-              <div class="flex justify-between gap-3 text-xs muted mt-1">
-
-                <span class="truncate">${esc(f.name)}</span>
-
-                <span class="whitespace-nowrap">${fmtSize(Number(f.size)||0)}</span>
-
-              </div>
-
-            `).join('')
-          :'';
-
-
-        return `
-
-          <div class="subpanel p-3 flex flex-col sm:flex-row sm:items-start gap-3">
-
-            <div class="flex-1 min-w-0">
-
-              <div class="font-semibold break-words">
-                ${esc(displayName)}
-              </div>
-
-              <div class="text-xs muted mt-1">
-                ${fmtSize(totalSize)}
-                · Codice
-                <strong class="tracking-wider">
-                  ${esc(x.code||'')}
-                </strong>
-                ${isGroup?' · Gruppo':''}
-              </div>
-
-              ${fileDetails}
-
-            </div>
-
-            <div class="flex gap-2 shrink-0">
-
-              <button
-                class="btn btn-secondary copy-queue"
-                data-code="${esc(x.code||'')}"
-              >
-                Copia codice
-              </button>
-
-              <button
-                class="btn btn-secondary delete-item text-red-400"
-                data-id="${esc(x.id||'')}"
-                data-code="${esc(x.code||'')}"
-              >
-                Rimuovi
-              </button>
-
-            </div>
-
+    $('queueList').innerHTML=queueItems.map(x=>{
+      const isGroup=Array.isArray(x.files);
+      const files=isGroup?x.files:[];
+      const totalSize=isGroup ? files.reduce((s,f)=>s+Number(f.size||0),0) : Number(x.size||0);
+      const displayName=isGroup ? 'Gruppo di '+files.length+' file' : (x.name||'File');
+      
+      const fileDetails=isGroup
+        ?files.map(f=>`
+          <div class="flex justify-between gap-3 text-xs muted mt-1">
+            <span class="truncate">${esc(f.name)}</span>
+            <span class="whitespace-nowrap">${fmtSize(Number(f.size)||0)} · Scaricato ${f.downloads || 0} volte</span>
           </div>
+        `).join('')
+        : `<div class="text-xs muted mt-1">Scaricato ${x.downloads || 0} volte</div>`;
 
-        `;
+      return `
+        <div class="subpanel p-3 flex flex-col sm:flex-row sm:items-start gap-3">
+          <div class="flex-1 min-w-0">
+            <div class="font-semibold break-words">${esc(displayName)}</div>
+            <div class="text-xs muted mt-1">
+              ${fmtSize(totalSize)} · Codice <strong class="tracking-wider">${esc(x.code||'')}</strong> ${isGroup?' · Gruppo':''}
+            </div>
+            ${fileDetails}
+          </div>
+          <div class="flex gap-2 shrink-0">
+            <button class="btn btn-secondary copy-queue" data-code="${esc(x.code||'')}">Copia codice</button>
+            <button class="btn btn-secondary delete-item text-red-400" data-id="${esc(x.id||'')}" data-code="${esc(x.code||'')}">Rimuovi</button>
+          </div>
+        </div>
+      `;
+    }).join('');
 
-      }).join('');
-
-
-    $('queueList')
-      .querySelectorAll('.copy-queue')
-      .forEach(b=>{
-
-        b.addEventListener('click',()=>{
-
-          navigator.clipboard.writeText(
-            b.dataset.code
-          )
-          .then(()=>toast('Codice copiato.'))
-          .catch(()=>toast('Copia non disponibile.'));
-
-        });
-
+    $('queueList').querySelectorAll('.copy-queue').forEach(b=>{
+      b.addEventListener('click',()=>{
+        navigator.clipboard.writeText(b.dataset.code).then(()=>toast('Codice copiato.')).catch(()=>toast('Copia fallita.'));
       });
+    });
 
-
-    $('queueList')
-      .querySelectorAll('.delete-item')
-      .forEach(b=>{
-
-        b.addEventListener('click',()=>{
-
-          const item=queueItems.find(
-            x=>String(x.id)===b.dataset.id
-          );
-
-          deleteItem(
-            b.dataset.id,
-            b.dataset.code,
-            Array.isArray(item?.files)
-          );
-
-        });
-
+    $('queueList').querySelectorAll('.delete-item').forEach(b=>{
+      b.addEventListener('click',()=>{
+        const item=queueItems.find(x=>String(x.id)===b.dataset.id);
+        deleteItem(b.dataset.id, b.dataset.code, Array.isArray(item?.files));
       });
+    });
 
   }
   catch(e){
-
-    $('queueInfo').textContent=
-      'Impossibile caricare la coda: '+e.message;
-
+    $('queueInfo').textContent='Impossibile caricare la coda: '+e.message;
     $('queueList').innerHTML='';
-
   }
-
 }
 
 
 async function deleteItem(id,code,isGroup=false){
-
   const message=isGroup
-    ?'Vuoi eliminare questo gruppo? Verranno rimossi tutti i file contenuti nel gruppo da Dropbox e il codice non sarà più utilizzabile.'
-    :'Vuoi rimuovere questo file dalla coda? Se il Worker è configurato per la cancellazione remota, verrà eliminato anche da Dropbox.';
+    ?'Vuoi eliminare questo gruppo? Verranno rimossi tutti i file da Dropbox e il codice non sarà più utilizzabile.'
+    :'Vuoi rimuovere questo file dalla coda?';
 
-  if(!confirm(message))
-    return;
+  if(!confirm(message)) return;
 
   try{
-
-    await workerCall(
-      '/api/item',
-      {
-        method:'DELETE',
-        body:{id,code},
-        auth:true
-      }
-    );
-
-    toast(
-      isGroup
-        ?'Gruppo rimosso.'
-        :'Elemento rimosso.'
-    );
-
+    await workerCall('/api/item', { method:'DELETE', body:{id,code}, auth:true });
+    toast(isGroup ? 'Gruppo rimosso.' : 'Elemento rimosso.');
     loadQueue();
-
   }
   catch(e){
-
-    toast(
-      'Rimozione non riuscita: '+e.message,
-      6000
-    );
-
+    toast('Rimozione fallita: '+e.message, 6000);
   }
-
 }
 
-
-$('refreshQueue').addEventListener(
-  'click',
-  loadQueue
-);
+$('refreshQueue').addEventListener('click', loadQueue);
 
 
 /* =========================================================
@@ -1989,8 +1114,10 @@ $('refreshQueue').addEventListener(
 ========================================================= */
 
 handleOAuth();
-
 lucide.createIcons();
+
+// Imposta "Ricevi" come tab predefinito
+showTab('receive');
 
 })();
 </script>
