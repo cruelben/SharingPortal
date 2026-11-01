@@ -1,41 +1,24 @@
-
 /*
 ============================================================
  SHARINGPORTAL - CLOUDFLARE WORKER
- Versione 1.6.0
-
- Compatibile con:
- - Vecchi invii individuali versione 1.5.0
- - Nuovi invii di gruppi versione 1.6.0
-
- KV binding richiesto: SP_KV
+ Versione 1.6.1 (con contatore download)
 
  API:
- POST   /api/register       (vecchio sistema)
- POST   /api/register-group (nuovo sistema)
+ POST   /api/register
+ POST   /api/register-group
  GET    /api/redeem?code=XXXXX
  GET    /api/list
+ GET    /api/download?code=XXXXX&index=Y
  DELETE /api/item
 ============================================================
 */
 
 const ALLOWED_ORIGIN = "https://cruelben.github.io";
-
-const DROPBOX_ACCOUNT_URL =
-  "https://api.dropboxapi.com/2/users/get_current_account";
-
-const DROPBOX_DELETE_URL =
-  "https://api.dropboxapi.com/2/files/delete_v2";
-
+const DROPBOX_ACCOUNT_URL = "https://api.dropboxapi.com/2/users/get_current_account";
+const DROPBOX_DELETE_URL = "https://api.dropboxapi.com/2/files/delete_v2";
 const CODE_PATTERN = /^[A-HJ-NP-Z2-9]{5}$/;
-
 const MAX_REQUEST_SIZE = 100 * 1024;
 const MAX_GROUP_FILES = 100;
-
-
-/* =========================================================
-   RISPOSTE HTTP E CORS
-========================================================= */
 
 function corsHeaders(origin) {
   return {
@@ -62,11 +45,6 @@ function errorResponse(message, status, origin) {
   return jsonResponse({ error: message }, status, origin);
 }
 
-
-/* =========================================================
-   FUNZIONI GENERALI
-========================================================= */
-
 function normalizeCode(code) {
   return String(code || "").trim().toUpperCase();
 }
@@ -74,146 +52,61 @@ function normalizeCode(code) {
 function validDropboxLink(link) {
   try {
     const url = new URL(link);
-
     return (
       url.protocol === "https:" &&
-      (
-        url.hostname === "www.dropbox.com" ||
-        url.hostname === "dropbox.com" ||
-        url.hostname === "dl.dropboxusercontent.com"
-      )
+      (url.hostname === "www.dropbox.com" || url.hostname === "dropbox.com" || url.hostname === "dl.dropboxusercontent.com")
     );
-  }
-  catch {
-    return false;
-  }
+  } catch { return false; }
 }
 
 function validDropboxPath(path) {
-  return (
-    typeof path === "string" &&
-    path.startsWith("/") &&
-    !path.includes("\0") &&
-    path.length <= 1000
-  );
+  return (typeof path === "string" && path.startsWith("/") && !path.includes("\0") && path.length <= 1000);
 }
 
-function randomId() {
-  return crypto.randomUUID();
-}
-
-
-/* =========================================================
-   AUTENTICAZIONE DROPBOX
-========================================================= */
+function randomId() { return crypto.randomUUID(); }
 
 async function verifyDropboxToken(token) {
-  if (!token) {
-    throw new Error("Token Dropbox mancante.");
-  }
-
+  if (!token) throw new Error("Token Dropbox mancante.");
   const response = await fetch(DROPBOX_ACCOUNT_URL, {
     method: "POST",
-    headers: {
-      "Authorization": "Bearer " + token
-    }
+    headers: { "Authorization": "Bearer " + token }
   });
-
   const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    throw new Error(
-      "Autenticazione Dropbox non valida: " +
-      (data.error_summary || response.status)
-    );
-  }
-
-  if (!data.account_id) {
-    throw new Error(
-      "Dropbox non ha restituito l'identificativo account."
-    );
-  }
-
-  return {
-    accountId: data.account_id,
-    displayName: data.name?.display_name || ""
-  };
+  if (!response.ok) throw new Error("Autenticazione non valida: " + (data.error_summary || response.status));
+  if (!data.account_id) throw new Error("Dropbox non ha restituito l'identificativo account.");
+  return { accountId: data.account_id, displayName: data.name?.display_name || "" };
 }
 
 function getBearerToken(request) {
   const header = request.headers.get("Authorization");
-
-  if (!header || !header.startsWith("Bearer ")) {
-    return null;
-  }
-
+  if (!header || !header.startsWith("Bearer ")) return null;
   return header.substring(7).trim();
 }
 
 async function requireOwner(request) {
   const token = getBearerToken(request);
-
-  if (!token) {
-    throw new Error("Autenticazione richiesta.");
-  }
-
+  if (!token) throw new Error("Autenticazione richiesta.");
   return await verifyDropboxToken(token);
 }
 
-
-/* =========================================================
-   LIMITAZIONE RICERCHE PUBBLICHE
-========================================================= */
-
 async function checkRateLimit(request, env) {
-  const ip =
-    request.headers.get("CF-Connecting-IP") ||
-    "unknown";
-
+  const ip = request.headers.get("CF-Connecting-IP") || "unknown";
   const key = "ratelimit:" + ip;
-
   const current = await env.SP_KV.get(key);
   const count = current ? Number(current) : 0;
-
-  if (count >= 30) {
-    return false;
-  }
-
-  await env.SP_KV.put(
-    key,
-    String(count + 1),
-    { expirationTtl: 600 }
-  );
-
+  if (count >= 30) return false;
+  await env.SP_KV.put(key, String(count + 1), { expirationTtl: 600 });
   return true;
 }
-
-
-/* =========================================================
-   REGISTRAZIONE VECCHIO FILE SINGOLO
-   POST /api/register
-
-   Mantiene la compatibilità con i vecchi codici.
-========================================================= */
 
 async function registerFile(request, env) {
   const origin = request.headers.get("Origin");
   const owner = await requireOwner(request);
-
   const text = await request.text();
-
-  if (text.length > MAX_REQUEST_SIZE) {
-    return errorResponse("Richiesta troppo grande.", 413, origin);
-  }
+  if (text.length > MAX_REQUEST_SIZE) return errorResponse("Richiesta troppo grande.", 413, origin);
 
   let body;
-
-  try {
-    body = JSON.parse(text);
-  }
-  catch {
-    return errorResponse("JSON non valido.", 400, origin);
-  }
+  try { body = JSON.parse(text); } catch { return errorResponse("JSON non valido.", 400, origin); }
 
   const code = normalizeCode(body.code);
   const name = String(body.name || "").trim();
@@ -221,48 +114,19 @@ async function registerFile(request, env) {
   const path = String(body.path || "").trim();
   const size = Number(body.size);
 
-  if (!CODE_PATTERN.test(code)) {
-    return errorResponse("Codice non valido.", 400, origin);
-  }
-
-  if (!name || name.length > 255) {
-    return errorResponse("Nome file non valido.", 400, origin);
-  }
-
-  if (!Number.isSafeInteger(size) || size < 0) {
-    return errorResponse("Dimensione file non valida.", 400, origin);
-  }
-
-  if (!validDropboxLink(link)) {
-    return errorResponse("Link Dropbox non valido.", 400, origin);
-  }
-
-  if (!validDropboxPath(path)) {
-    return errorResponse("Percorso Dropbox non valido.", 400, origin);
-  }
+  if (!CODE_PATTERN.test(code)) return errorResponse("Codice non valido.", 400, origin);
+  if (!name || name.length > 255) return errorResponse("Nome file non valido.", 400, origin);
+  if (!Number.isSafeInteger(size) || size < 0) return errorResponse("Dimensione non valida.", 400, origin);
+  if (!validDropboxLink(link)) return errorResponse("Link non valido.", 400, origin);
+  if (!validDropboxPath(path)) return errorResponse("Percorso non valido.", 400, origin);
 
   const codeKey = "code:" + code;
-
-  if (await env.SP_KV.get(codeKey)) {
-    return errorResponse(
-      "Codice già utilizzato. Riprova.",
-      409,
-      origin
-    );
-  }
+  if (await env.SP_KV.get(codeKey)) return errorResponse("Codice già utilizzato.", 409, origin);
 
   const id = randomId();
-
   const record = {
-    id,
-    code,
-    ownerId: owner.accountId,
-    ownerName: owner.displayName,
-    name,
-    size,
-    link,
-    path,
-    createdAt: new Date().toISOString()
+    id, code, ownerId: owner.accountId, ownerName: owner.displayName,
+    name, size, link, path, downloads: 0, createdAt: new Date().toISOString()
   };
 
   const itemKey = "item:" + id;
@@ -272,74 +136,34 @@ async function registerFile(request, env) {
     await env.SP_KV.put(itemKey, JSON.stringify(record));
     await env.SP_KV.put(codeKey, id);
     await env.SP_KV.put(ownerKey, JSON.stringify(record));
-  }
-  catch (error) {
-    await env.SP_KV.delete(itemKey);
-    await env.SP_KV.delete(codeKey);
-    await env.SP_KV.delete(ownerKey);
+  } catch (error) {
+    await env.SP_KV.delete(itemKey); await env.SP_KV.delete(codeKey); await env.SP_KV.delete(ownerKey);
     throw error;
   }
 
-  return jsonResponse({
-    success: true,
-    message: "File registrato correttamente.",
-    item: record
-  }, 200, origin);
+  return jsonResponse({ success: true, message: "File registrato.", item: record }, 200, origin);
 }
-
-
-/* =========================================================
-   NUOVA REGISTRAZIONE GRUPPO
-   POST /api/register-group
-
-   Un codice identifica tutti i file del gruppo.
-========================================================= */
 
 async function registerGroup(request, env) {
   const origin = request.headers.get("Origin");
   const owner = await requireOwner(request);
-
   const text = await request.text();
-
-  if (text.length > MAX_REQUEST_SIZE) {
-    return errorResponse("Richiesta troppo grande.", 413, origin);
-  }
+  if (text.length > MAX_REQUEST_SIZE) return errorResponse("Richiesta troppo grande.", 413, origin);
 
   let body;
-
-  try {
-    body = JSON.parse(text);
-  }
-  catch {
-    return errorResponse("JSON non valido.", 400, origin);
-  }
+  try { body = JSON.parse(text); } catch { return errorResponse("JSON non valido.", 400, origin); }
 
   const code = normalizeCode(body.code);
   const folderPath = String(body.folderPath || "").trim();
   const files = body.files;
 
-  if (!CODE_PATTERN.test(code)) {
-    return errorResponse("Codice non valido.", 400, origin);
-  }
-
-  if (!validDropboxPath(folderPath)) {
-    return errorResponse("Cartella Dropbox non valida.", 400, origin);
-  }
-
-  if (
-    !Array.isArray(files) ||
-    files.length < 1 ||
-    files.length > MAX_GROUP_FILES
-  ) {
-    return errorResponse(
-      "Numero di file non valido. Massimo 100 file per gruppo.",
-      400,
-      origin
-    );
+  if (!CODE_PATTERN.test(code)) return errorResponse("Codice non valido.", 400, origin);
+  if (!validDropboxPath(folderPath)) return errorResponse("Cartella non valida.", 400, origin);
+  if (!Array.isArray(files) || files.length < 1 || files.length > MAX_GROUP_FILES) {
+    return errorResponse("Numero di file non valido (max 100).", 400, origin);
   }
 
   let totalSize = 0;
-
   const cleanFiles = [];
 
   for (const file of files) {
@@ -348,64 +172,24 @@ async function registerGroup(request, env) {
     const path = String(file.path || "").trim();
     const size = Number(file.size);
 
-    if (!name || name.length > 255) {
-      return errorResponse("Nome file non valido.", 400, origin);
-    }
-
-    if (!Number.isSafeInteger(size) || size < 0) {
-      return errorResponse("Dimensione file non valida.", 400, origin);
-    }
-
-    if (!validDropboxLink(link)) {
-      return errorResponse("Link Dropbox non valido.", 400, origin);
-    }
-
-    if (!validDropboxPath(path)) {
-      return errorResponse("Percorso file Dropbox non valido.", 400, origin);
-    }
-
-    if (!path.startsWith(folderPath + "/")) {
-      return errorResponse(
-        "Un file non appartiene alla cartella del gruppo.",
-        400,
-        origin
-      );
-    }
+    if (!name || name.length > 255) return errorResponse("Nome file non valido.", 400, origin);
+    if (!Number.isSafeInteger(size) || size < 0) return errorResponse("Dimensione non valida.", 400, origin);
+    if (!validDropboxLink(link)) return errorResponse("Link non valido.", 400, origin);
+    if (!validDropboxPath(path)) return errorResponse("Percorso non valido.", 400, origin);
+    if (!path.startsWith(folderPath + "/")) return errorResponse("File fuori dalla cartella.", 400, origin);
 
     totalSize += size;
-
-    cleanFiles.push({
-      name,
-      size,
-      link,
-      path
-    });
+    cleanFiles.push({ name, size, link, path, downloads: 0 });
   }
 
   const codeKey = "code:" + code;
-
-  if (await env.SP_KV.get(codeKey)) {
-    return errorResponse(
-      "Codice già utilizzato. Riprova.",
-      409,
-      origin
-    );
-  }
+  if (await env.SP_KV.get(codeKey)) return errorResponse("Codice già utilizzato.", 409, origin);
 
   const id = randomId();
-
   const record = {
-    id,
-    type: "group",
-    code,
-    ownerId: owner.accountId,
-    ownerName: owner.displayName,
-    name: cleanFiles.length + " file",
-    count: cleanFiles.length,
-    size: totalSize,
-    folderPath,
-    files: cleanFiles,
-    createdAt: new Date().toISOString()
+    id, type: "group", code, ownerId: owner.accountId, ownerName: owner.displayName,
+    name: cleanFiles.length + " file", count: cleanFiles.length, size: totalSize,
+    folderPath, files: cleanFiles, createdAt: new Date().toISOString()
   };
 
   const groupKey = "group:" + id;
@@ -413,454 +197,210 @@ async function registerGroup(request, env) {
 
   try {
     await env.SP_KV.put(groupKey, JSON.stringify(record));
-
-    await env.SP_KV.put(
-      codeKey,
-      "group:" + id
-    );
-
-    await env.SP_KV.put(
-      ownerKey,
-      JSON.stringify(record)
-    );
-  }
-  catch (error) {
-    await env.SP_KV.delete(groupKey);
-    await env.SP_KV.delete(codeKey);
-    await env.SP_KV.delete(ownerKey);
+    await env.SP_KV.put(codeKey, "group:" + id);
+    await env.SP_KV.put(ownerKey, JSON.stringify(record));
+  } catch (error) {
+    await env.SP_KV.delete(groupKey); await env.SP_KV.delete(codeKey); await env.SP_KV.delete(ownerKey);
     throw error;
   }
 
-  return jsonResponse({
-    success: true,
-    message: "Gruppo registrato correttamente.",
-    item: record
-  }, 200, origin);
+  return jsonResponse({ success: true, message: "Gruppo registrato.", item: record }, 200, origin);
 }
-
-
-/* =========================================================
-   RICERCA PUBBLICA
-   GET /api/redeem?code=XXXXX
-
-   Gestisce sia i vecchi file sia i nuovi gruppi.
-========================================================= */
 
 async function redeemFile(request, env) {
   const origin = request.headers.get("Origin");
-
-  if (!await checkRateLimit(request, env)) {
-    return errorResponse(
-      "Troppi tentativi. Riprova tra qualche minuto.",
-      429,
-      origin
-    );
-  }
+  if (!await checkRateLimit(request, env)) return errorResponse("Troppi tentativi.", 429, origin);
 
   const url = new URL(request.url);
-
-  const code = normalizeCode(
-    url.searchParams.get("code")
-  );
-
-  if (!CODE_PATTERN.test(code)) {
-    return errorResponse("Codice non valido.", 400, origin);
-  }
+  const code = normalizeCode(url.searchParams.get("code"));
+  if (!CODE_PATTERN.test(code)) return errorResponse("Codice non valido.", 400, origin);
 
   const reference = await env.SP_KV.get("code:" + code);
+  if (!reference) return jsonResponse({ success: true, items: [] }, 200, origin);
 
-  if (!reference) {
-    return jsonResponse({
-      success: true,
-      items: []
-    }, 200, origin);
-  }
-
-  /*
-    NUOVO GRUPPO
-  */
+  const workerBase = new URL(request.url).origin;
 
   if (reference.startsWith("group:")) {
     const raw = await env.SP_KV.get(reference);
-
-    if (!raw) {
-      return jsonResponse({
-        success: true,
-        items: []
-      }, 200, origin);
-    }
+    if (!raw) return jsonResponse({ success: true, items: [] }, 200, origin);
 
     let record;
+    try { record = JSON.parse(raw); } catch { return errorResponse("Gruppo danneggiato.", 500, origin); }
 
-    try {
-      record = JSON.parse(raw);
-    }
-    catch {
-      return errorResponse("Gruppo danneggiato.", 500, origin);
-    }
-
-    const items = (record.files || []).map(file => ({
+    const items = (record.files || []).map((file, i) => ({
       name: file.name,
       size: file.size,
-      link: file.link
+      link: `${workerBase}/api/download?code=${code}&index=${i}`, // Link interno per il conteggio
+      downloads: file.downloads || 0
     }));
 
-    return jsonResponse({
-      success: true,
-      type: "group",
-      code: record.code,
-      count: items.length,
-      items
-    }, 200, origin);
+    return jsonResponse({ success: true, type: "group", code: record.code, count: items.length, items }, 200, origin);
   }
-
-  /*
-    VECCHIO FILE SINGOLO
-  */
 
   const raw = await env.SP_KV.get("item:" + reference);
-
-  if (!raw) {
-    return jsonResponse({
-      success: true,
-      items: []
-    }, 200, origin);
-  }
+  if (!raw) return jsonResponse({ success: true, items: [] }, 200, origin);
 
   let record;
-
-  try {
-    record = JSON.parse(raw);
-  }
-  catch {
-    return errorResponse("Record danneggiato.", 500, origin);
-  }
+  try { record = JSON.parse(raw); } catch { return errorResponse("Record danneggiato.", 500, origin); }
 
   return jsonResponse({
-    success: true,
-    type: "single",
+    success: true, type: "single",
     items: [{
-      code: record.code,
-      name: record.name,
-      size: record.size,
-      link: record.link,
-      createdAt: record.createdAt
+      code: record.code, name: record.name, size: record.size,
+      link: `${workerBase}/api/download?code=${code}`, // Link interno
+      downloads: record.downloads || 0, createdAt: record.createdAt
     }]
   }, 200, origin);
 }
 
+async function handleDownload(request, env) {
+  const url = new URL(request.url);
+  const code = normalizeCode(url.searchParams.get("code"));
+  const index = url.searchParams.get("index"); // Solo per i gruppi
 
-/* =========================================================
-   ELENCO PERSONALE
-   GET /api/list
+  if (!CODE_PATTERN.test(code)) return new Response("Codice non valido.", { status: 400 });
 
-   Restituisce vecchi file e nuovi gruppi.
-========================================================= */
+  const reference = await env.SP_KV.get("code:" + code);
+  if (!reference) return new Response("Codice non trovato o scaduto.", { status: 404 });
+
+  let targetLink = null;
+
+  if (reference.startsWith("group:")) {
+    if (index === null) return new Response("Indice file mancante.", { status: 400 });
+    const raw = await env.SP_KV.get(reference);
+    if (!raw) return new Response("Gruppo non trovato.", { status: 404 });
+    
+    let record = JSON.parse(raw);
+    let i = parseInt(index, 10);
+    
+    if (!record.files || !record.files[i]) return new Response("File non trovato.", { status: 404 });
+    
+    targetLink = record.files[i].link;
+    record.files[i].downloads = (record.files[i].downloads || 0) + 1;
+    
+    // Salva aggiornamento in background per non bloccare il redirect
+    const updates = [
+        env.SP_KV.put(reference, JSON.stringify(record)),
+        env.SP_KV.put("owner:" + record.ownerId + ":" + record.id, JSON.stringify(record))
+    ];
+    if (env.waitUntil) env.waitUntil(Promise.all(updates)); else await Promise.all(updates);
+    
+  } else {
+    const raw = await env.SP_KV.get("item:" + reference);
+    if (!raw) return new Response("File non trovato.", { status: 404 });
+    
+    let record = JSON.parse(raw);
+    targetLink = record.link;
+    record.downloads = (record.downloads || 0) + 1;
+    
+    const updates = [
+        env.SP_KV.put("item:" + reference, JSON.stringify(record)),
+        env.SP_KV.put("owner:" + record.ownerId + ":" + record.id, JSON.stringify(record))
+    ];
+    if (env.waitUntil) env.waitUntil(Promise.all(updates)); else await Promise.all(updates);
+  }
+
+  if (!targetLink) return new Response("Link non disponibile.", { status: 500 });
+  
+  return Response.redirect(targetLink, 302);
+}
 
 async function listFiles(request, env) {
   const origin = request.headers.get("Origin");
   const owner = await requireOwner(request);
-
   const prefix = "owner:" + owner.accountId + ":";
-
   const items = [];
   let cursor;
 
   do {
-    const result = await env.SP_KV.list({
-      prefix,
-      limit: 1000,
-      cursor
-    });
-
+    const result = await env.SP_KV.list({ prefix, limit: 1000, cursor });
     for (const key of result.keys) {
       const raw = await env.SP_KV.get(key.name);
-
       if (!raw) continue;
-
-      try {
-        items.push(JSON.parse(raw));
-      }
-      catch {
-        // Ignora record non leggibili.
-      }
+      try { items.push(JSON.parse(raw)); } catch {}
     }
-
     cursor = result.list_complete ? undefined : result.cursor;
-  }
-  while (cursor);
+  } while (cursor);
 
-  items.sort((a, b) =>
-    new Date(b.createdAt) - new Date(a.createdAt)
-  );
+  items.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-  return jsonResponse({
-    success: true,
-    count: items.length,
-    items
-  }, 200, origin);
+  return jsonResponse({ success: true, count: items.length, items }, 200, origin);
 }
-
-
-/* =========================================================
-   ELIMINAZIONE
-   DELETE /api/item
-
-   Vecchi file: elimina il singolo file.
-   Nuovi gruppi: elimina l'intera cartella Dropbox.
-========================================================= */
 
 async function deleteFile(request, env) {
   const origin = request.headers.get("Origin");
   const owner = await requireOwner(request);
-
   let body;
-
-  try {
-    body = await request.json();
-  }
-  catch {
-    return errorResponse("JSON non valido.", 400, origin);
-  }
+  try { body = await request.json(); } catch { return errorResponse("JSON non valido.", 400, origin); }
 
   const id = String(body.id || "").trim();
   const code = normalizeCode(body.code);
-
-  if (!id || !code) {
-    return errorResponse("ID o codice mancante.", 400, origin);
-  }
+  if (!id || !code) return errorResponse("ID o codice mancante.", 400, origin);
 
   const token = getBearerToken(request);
 
-  /*
-    PRIMA VERIFICA SE È UN GRUPPO
-  */
-
   const groupRaw = await env.SP_KV.get("group:" + id);
-
   if (groupRaw) {
     let record;
-
-    try {
-      record = JSON.parse(groupRaw);
-    }
-    catch {
-      return errorResponse("Gruppo danneggiato.", 500, origin);
-    }
-
-    if (record.ownerId !== owner.accountId) {
-      return errorResponse(
-        "Non sei autorizzato a eliminare questo gruppo.",
-        403,
-        origin
-      );
-    }
-
-    if (record.code !== code) {
-      return errorResponse(
-        "Codice non corrispondente.",
-        400,
-        origin
-      );
-    }
-
-    /*
-      Dropbox elimina la cartella del gruppo
-      e il suo contenuto.
-    */
+    try { record = JSON.parse(groupRaw); } catch { return errorResponse("Gruppo danneggiato.", 500, origin); }
+    if (record.ownerId !== owner.accountId) return errorResponse("Non autorizzato.", 403, origin);
+    if (record.code !== code) return errorResponse("Codice errato.", 400, origin);
 
     const dropboxResponse = await fetch(DROPBOX_DELETE_URL, {
-      method: "POST",
-      headers: {
-        "Authorization": "Bearer " + token,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        path: record.folderPath
-      })
+      method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify({ path: record.folderPath })
     });
-
-    const dropboxData =
-      await dropboxResponse.json().catch(() => ({}));
-
     if (!dropboxResponse.ok) {
-      return errorResponse(
-        "Dropbox non ha consentito la cancellazione: " +
-        (dropboxData.error_summary || dropboxResponse.status),
-        502,
-        origin
-      );
+      const dropboxData = await dropboxResponse.json().catch(() => ({}));
+      return errorResponse("Dropbox: " + (dropboxData.error_summary || dropboxResponse.status), 502, origin);
     }
 
-    await env.SP_KV.delete("group:" + id);
-    await env.SP_KV.delete("code:" + code);
-    await env.SP_KV.delete(
-      "owner:" + owner.accountId + ":" + id
-    );
-
-    return jsonResponse({
-      success: true,
-      message: "Gruppo e relativi file eliminati da Dropbox."
-    }, 200, origin);
+    await env.SP_KV.delete("group:" + id); await env.SP_KV.delete("code:" + code); await env.SP_KV.delete("owner:" + owner.accountId + ":" + id);
+    return jsonResponse({ success: true, message: "Gruppo eliminato." }, 200, origin);
   }
-
-  /*
-    VECCHIO FILE SINGOLO
-  */
 
   const raw = await env.SP_KV.get("item:" + id);
-
-  if (!raw) {
-    return errorResponse("File non trovato.", 404, origin);
-  }
-
+  if (!raw) return errorResponse("File non trovato.", 404, origin);
   let record;
-
-  try {
-    record = JSON.parse(raw);
-  }
-  catch {
-    return errorResponse("Record danneggiato.", 500, origin);
-  }
-
-  if (record.ownerId !== owner.accountId) {
-    return errorResponse(
-      "Non sei autorizzato a eliminare questo file.",
-      403,
-      origin
-    );
-  }
-
-  if (record.code !== code) {
-    return errorResponse(
-      "Codice non corrispondente.",
-      400,
-      origin
-    );
-  }
+  try { record = JSON.parse(raw); } catch { return errorResponse("Record danneggiato.", 500, origin); }
+  if (record.ownerId !== owner.accountId) return errorResponse("Non autorizzato.", 403, origin);
+  if (record.code !== code) return errorResponse("Codice errato.", 400, origin);
 
   const dropboxResponse = await fetch(DROPBOX_DELETE_URL, {
-    method: "POST",
-    headers: {
-      "Authorization": "Bearer " + token,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      path: record.path
-    })
+    method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+    body: JSON.stringify({ path: record.path })
   });
-
-  const dropboxData =
-    await dropboxResponse.json().catch(() => ({}));
-
   if (!dropboxResponse.ok) {
-    return errorResponse(
-      "Dropbox non ha consentito la cancellazione: " +
-      (dropboxData.error_summary || dropboxResponse.status),
-      502,
-      origin
-    );
+    const dropboxData = await dropboxResponse.json().catch(() => ({}));
+    return errorResponse("Dropbox: " + (dropboxData.error_summary || dropboxResponse.status), 502, origin);
   }
 
-  await env.SP_KV.delete("item:" + id);
-  await env.SP_KV.delete("code:" + code);
-  await env.SP_KV.delete(
-    "owner:" + owner.accountId + ":" + id
-  );
-
-  return jsonResponse({
-    success: true,
-    message: "File eliminato da Dropbox e dalla coda."
-  }, 200, origin);
+  await env.SP_KV.delete("item:" + id); await env.SP_KV.delete("code:" + code); await env.SP_KV.delete("owner:" + owner.accountId + ":" + id);
+  return jsonResponse({ success: true, message: "File eliminato." }, 200, origin);
 }
-
-
-/* =========================================================
-   ROUTER PRINCIPALE
-========================================================= */
 
 export default {
   async fetch(request, env, ctx) {
     const origin = request.headers.get("Origin");
+    if (origin && origin !== ALLOWED_ORIGIN) return new Response("Origin non autorizzata.", { status: 403 });
+    if (!env.SP_KV) return errorResponse("KV mancante.", 500, origin);
 
-    if (origin && origin !== ALLOWED_ORIGIN) {
-      return new Response(
-        "Origin non autorizzata.",
-        { status: 403 }
-      );
-    }
-
-    if (!env.SP_KV) {
-      return errorResponse(
-        "Configurazione Cloudflare KV mancante. Binding richiesto: SP_KV.",
-        500,
-        origin
-      );
-    }
-
-    if (request.method === "OPTIONS") {
-      return new Response(null, {
-        status: 204,
-        headers: corsHeaders(origin)
-      });
-    }
+    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(origin) });
 
     const url = new URL(request.url);
     const path = url.pathname;
 
     try {
-      if (
-        path === "/api/register" &&
-        request.method === "POST"
-      ) {
-        return await registerFile(request, env);
-      }
-
-      if (
-        path === "/api/register-group" &&
-        request.method === "POST"
-      ) {
-        return await registerGroup(request, env);
-      }
-
-      if (
-        path === "/api/redeem" &&
-        request.method === "GET"
-      ) {
-        return await redeemFile(request, env);
-      }
-
-      if (
-        path === "/api/list" &&
-        request.method === "GET"
-      ) {
-        return await listFiles(request, env);
-      }
-
-      if (
-        path === "/api/item" &&
-        request.method === "DELETE"
-      ) {
-        return await deleteFile(request, env);
-      }
-
-      return errorResponse(
-        "Endpoint non trovato.",
-        404,
-        origin
-      );
-    }
-    catch (error) {
-      console.error(
-        "SharingPortal Worker error:",
-        error
-      );
-
-      return errorResponse(
-        error.message || "Errore interno del Worker.",
-        500,
-        origin
-      );
+      if (path === "/api/register" && request.method === "POST") return await registerFile(request, env);
+      if (path === "/api/register-group" && request.method === "POST") return await registerGroup(request, env);
+      if (path === "/api/redeem" && request.method === "GET") return await redeemFile(request, env);
+      if (path === "/api/download" && request.method === "GET") return await handleDownload(request, env);
+      if (path === "/api/list" && request.method === "GET") return await listFiles(request, env);
+      if (path === "/api/item" && request.method === "DELETE") return await deleteFile(request, env);
+      return errorResponse("Endpoint non trovato.", 404, origin);
+    } catch (error) {
+      console.error("Worker error:", error);
+      return errorResponse(error.message || "Errore interno.", 500, origin);
     }
   }
 };

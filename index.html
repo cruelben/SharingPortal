@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#101827">
-<title>SharingPortal 1.6.0</title>
+<title>SharingPortal 1.7.2</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/lucide@latest"></script>
 
@@ -139,7 +139,7 @@ body {
 }
 code { font-family:ui-monospace,monospace; }
 
-/* OVERLAY LOADER (Attendere prego...) */
+/* OVERLAY LOADER */
 #globalLoader {
   position: fixed; inset: 0; z-index: 100;
   display: flex; align-items: center; justify-content: center;
@@ -192,7 +192,8 @@ code { font-family:ui-monospace,monospace; }
     <button id="themeBtn" class="btn btn-secondary !p-3" title="Cambia tema">
       <i data-lucide="sun-moon" class="w-5 h-5"></i>
     </button>
-    <button id="connectBtn" class="btn btn-primary flex items-center gap-2">
+    <!-- Il pulsante parte nascosto, appare solo nel tab Invia -->
+    <button id="connectBtn" class="btn btn-primary flex items-center gap-2 hidden">
       <i data-lucide="cloud" class="w-4 h-4"></i>
       <span>Collega Dropbox</span>
     </button>
@@ -238,23 +239,18 @@ code { font-family:ui-monospace,monospace; }
       </p>
     </div>
 
-    <div id="dropzone" class="dropzone p-8 md:p-12 text-center cursor-pointer">
-
+    <div id="dropzone" class="dropzone p-8 md:p-12 text-center cursor-pointer transition-all">
       <input id="fileInput" type="file" multiple class="hidden">
-
-      <div class="w-14 h-14 mx-auto rounded-2xl bg-blue-500/15 text-blue-400 flex items-center justify-center mb-4">
+      <div id="dropzoneIcon" class="w-14 h-14 mx-auto rounded-2xl bg-blue-500/15 text-blue-400 flex items-center justify-center mb-4 transition-all">
         <i data-lucide="files" class="w-7 h-7"></i>
       </div>
-
-      <div class="font-semibold text-lg">Trascina qui i file</div>
-      <p class="muted text-sm mt-1">
+      <div id="dropzoneTitle" class="font-semibold text-lg transition-all">Trascina qui i file</div>
+      <p id="dropzoneSub" class="muted text-sm mt-1 transition-all">
         oppure fai clic per selezionarli dal dispositivo
       </p>
-
-      <button id="browseBtn" class="btn btn-secondary mt-5">
+      <button id="browseBtn" class="btn btn-secondary mt-5 transition-all">
         Seleziona file
       </button>
-
     </div>
 
     <div id="selectedWrap" class="hidden mt-5">
@@ -408,7 +404,7 @@ code { font-family:ui-monospace,monospace; }
 </div>
 
 <footer class="text-center text-xs muted mt-9">
-  SharingPortal · Versione 1.6.0 · Dropbox + Cloudflare Workers ·
+  SharingPortal · Versione 1.7.2 · Dropbox + Cloudflare Workers ·
   Non caricare contenuti riservati: il codice funziona come una chiave di accesso.
 </footer>
 
@@ -481,7 +477,35 @@ function setConnected(ok,sub=''){
   $('connectBtn').innerHTML = ok
     ?'<i data-lucide="check-circle" class="w-4 h-4"></i><span>Dropbox collegato</span>'
     :'<i data-lucide="cloud" class="w-4 h-4"></i><span>Collega Dropbox</span>';
+  
+  updateDropzoneState();
   lucide.createIcons();
+}
+
+function updateDropzoneState() {
+  const dz = $('dropzone');
+  const icon = $('dropzoneIcon');
+  const title = $('dropzoneTitle');
+  const sub = $('dropzoneSub');
+  const btn = $('browseBtn');
+
+  if (!accessToken) {
+    dz.classList.add('opacity-50', 'cursor-not-allowed');
+    dz.classList.remove('cursor-pointer');
+    icon.classList.replace('bg-blue-500/15', 'bg-gray-500/15');
+    icon.classList.replace('text-blue-400', 'text-gray-400');
+    title.textContent = "Dropbox non collegato";
+    sub.textContent = "Collega il tuo account per sbloccare i caricamenti.";
+    btn.disabled = true;
+  } else {
+    dz.classList.remove('opacity-50', 'cursor-not-allowed');
+    dz.classList.add('cursor-pointer');
+    icon.classList.replace('bg-gray-500/15', 'bg-blue-500/15');
+    icon.classList.replace('text-gray-400', 'text-blue-400');
+    title.textContent = "Trascina qui i file";
+    sub.textContent = "oppure fai clic per selezionarli dal dispositivo";
+    btn.disabled = false;
+  }
 }
 
 
@@ -497,6 +521,13 @@ function showTab(tab){
   ['send','receive','queue'].forEach(x=>{
     $(x+'View').classList.toggle('hidden-view', x!==tab);
   });
+
+  // Mostra il pulsante Dropbox SOLO nel tab "Invia"
+  if (tab === 'send') {
+    $('connectBtn').classList.remove('hidden');
+  } else {
+    $('connectBtn').classList.add('hidden');
+  }
 
   if(tab==='queue') loadQueue();
 }
@@ -517,7 +548,6 @@ $('themeBtn').addEventListener('click',()=>{
   localStorage.setItem('sp_theme', document.body.classList.contains('light') ? 'light' : 'dark');
 });
 
-// Imposta il tema chiaro di default se non c'è preferenza salvata
 const savedTheme = localStorage.getItem('sp_theme');
 if(savedTheme === 'dark') {
   document.body.classList.remove('light');
@@ -590,6 +620,12 @@ async function handleOAuth(){
     await identifyAccount();
     setConnected(true, 'Account autorizzato. Token valido per questa sessione.');
     toast('Dropbox collegato correttamente.');
+    
+    // Se dopo il login l'utente è sul tab invia, sblocca la dropzone
+    if(!$('sendView').classList.contains('hidden-view')){
+       updateDropzoneState();
+    }
+    
     loadQueue();
   }
   catch(e){
@@ -617,19 +653,40 @@ $('connectBtn').addEventListener('click', ()=>{
    SELEZIONE FILE
 ========================================================= */
 
-$('browseBtn').addEventListener('click', e=>{ e.stopPropagation(); $('fileInput').click(); });
-$('dropzone').addEventListener('click', e=>{ if(e.target.id!=='browseBtn') $('fileInput').click(); });
+$('browseBtn').addEventListener('click', e=>{ 
+  e.stopPropagation(); 
+  if(!accessToken) { toast('Collega Dropbox per selezionare i file.'); return; }
+  $('fileInput').click(); 
+});
+
+$('dropzone').addEventListener('click', e=>{ 
+  if(e.target.id!=='browseBtn') {
+    if(!accessToken) { toast('Collega Dropbox per selezionare i file.'); return; }
+    $('fileInput').click(); 
+  }
+});
+
 $('fileInput').addEventListener('change', e=>{ addFiles([...e.target.files]); $('fileInput').value=''; });
 
 ['dragenter','dragover'].forEach(ev=>{
-  $('dropzone').addEventListener(ev,e=>{ e.preventDefault(); $('dropzone').classList.add('drag'); });
+  $('dropzone').addEventListener(ev,e=>{ 
+    e.preventDefault(); 
+    if(!accessToken) return; 
+    $('dropzone').classList.add('drag'); 
+  });
 });
+
 ['dragleave','drop'].forEach(ev=>{
   $('dropzone').addEventListener(ev,e=>{ e.preventDefault(); $('dropzone').classList.remove('drag'); });
 });
-$('dropzone').addEventListener('drop', e=>addFiles([...e.dataTransfer.files]));
+
+$('dropzone').addEventListener('drop', e=>{
+  if(!accessToken) { toast('Collega Dropbox per caricare i file.'); return; }
+  addFiles([...e.dataTransfer.files]);
+});
 
 function addFiles(files){
+  if(!accessToken) { toast('Collega Dropbox per selezionare i file.'); return; }
   if(!files.length) return;
   if(selectedFiles.length+files.length>MAX_FILES_PER_GROUP){
     toast('Massimo '+MAX_FILES_PER_GROUP+' file per gruppo.');
@@ -827,7 +884,6 @@ $('uploadBtn').addEventListener('click', async()=>{
   $('newCodes').classList.add('hidden');
   $('newCodesList').innerHTML='';
   
-  // MOSTRA BANNER DI ATTESA
   showLoader('Attendere prego...', 'Caricamento dei file in corso, non chiudere la pagina.');
   
   const filesToUpload=[...selectedFiles];
@@ -934,7 +990,7 @@ $('uploadBtn').addEventListener('click', async()=>{
   }
   finally{
     $('uploadBtn').disabled=false;
-    hideLoader(); // NASCONDE IL BANNER
+    hideLoader();
   }
 });
 
@@ -959,7 +1015,6 @@ $('redeemForm').addEventListener('submit', async e=>{
       return;
     }
 
-    // Genera il tasto "Scarica Tutto" se ci sono più file
     const downloadAllBtn = items.length > 1 ? `
       <button id="downloadAllBtn" class="btn btn-secondary w-full mb-4 flex items-center justify-center gap-2">
         <i data-lucide="download-cloud" class="w-4 h-4"></i>
@@ -992,15 +1047,13 @@ $('redeemForm').addEventListener('submit', async e=>{
 
     lucide.createIcons();
 
-    // Gestione "Scarica Tutto" con delay per evitare il blocco dei popup del browser
     if (items.length > 1) {
       $('downloadAllBtn').addEventListener('click', () => {
         const links = document.querySelectorAll('.download-link');
         links.forEach((link, index) => {
           setTimeout(() => {
-            // Apre in una nuova scheda per forzare il download senza far perdere il focus all'utente
             window.open(link.href, '_blank');
-          }, index * 800); // 800ms di distanza tra un download e l'altro
+          }, index * 800);
         });
         toast('Download multipli avviati. Controlla le schede o i download del browser.', 5000);
       });
@@ -1018,12 +1071,12 @@ $('redeemCode').addEventListener('input', e=>{
 
 
 /* =========================================================
-   CODA PERSONALE (Con contatore download)
+   CODA PERSONALE
 ========================================================= */
 
 async function loadQueue(){
   if(!accessToken){
-    $('queueInfo').textContent='Collega Dropbox per visualizzare i tuoi invii.';
+    $('queueInfo').textContent='Vai al tab "Invia" per collegare Dropbox e visualizzare i tuoi invii.';
     $('queueList').innerHTML='';
     return;
   }
@@ -1115,9 +1168,8 @@ $('refreshQueue').addEventListener('click', loadQueue);
 
 handleOAuth();
 lucide.createIcons();
-
-// Imposta "Ricevi" come tab predefinito
-showTab('receive');
+updateDropzoneState(); 
+showTab('receive'); // Tab predefinito
 
 })();
 </script>
