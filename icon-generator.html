@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SharingPortal · Icon Generator</title>
+<style>
+  *{box-sizing:border-box}
+  body{
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    background:radial-gradient(ellipse at top,#172943 0,#0b1220 55%);
+    color:#e7eef9;margin:0;padding:32px 20px;min-height:100vh;
+  }
+  .wrap{max-width:960px;margin:0 auto}
+  h1{font-size:24px;margin:0 0 6px;font-weight:800;letter-spacing:-.02em}
+  .sub{color:#91a2ba;font-size:14px;margin-bottom:28px}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:.12em;color:#91a2ba;font-weight:700;margin:0 0 12px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;margin-bottom:28px}
+  .card{
+    background:#111c2e;border:1px solid #263750;border-radius:16px;
+    padding:16px 12px;text-align:center;display:flex;flex-direction:column;
+    align-items:center;gap:10px;
+  }
+  .card canvas{display:block;image-rendering:pixelated;image-rendering:crisp-edges}
+  .card .name{font-size:11px;color:#91a2ba;font-family:ui-monospace,monospace}
+  .panel{background:#111c2e;border:1px solid #263750;border-radius:16px;padding:20px;margin-bottom:20px}
+  button{
+    background:#2563eb;color:#fff;border:0;border-radius:11px;padding:12px 18px;
+    font-weight:650;font-size:14px;cursor:pointer;margin:4px 4px 4px 0;
+    transition:.15s;font-family:inherit;
+  }
+  button:hover{background:#1d4ed8}
+  button:active{transform:translateY(1px)}
+  button.secondary{background:#17243a;border:1px solid #263750;color:#e7eef9}
+  button.secondary:hover{background:#1e2f49}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .hint{
+    font-size:13px;color:#91a2ba;line-height:1.6;margin-top:14px;
+    padding:12px 14px;background:#0b1220;border-radius:10px;
+    border:1px solid #263750;
+  }
+  code{background:#17243a;padding:2px 6px;border-radius:4px;font-size:12px;
+    font-family:ui-monospace,monospace;color:#93c5fd}
+  .step{display:flex;gap:12px;align-items:flex-start;margin-bottom:12px;font-size:14px;line-height:1.5}
+  .step .num{
+    flex-shrink:0;width:24px;height:24px;border-radius:50%;
+    background:#2563eb;color:#fff;font-size:12px;font-weight:700;
+    display:flex;align-items:center;justify-content:center;margin-top:1px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>SharingPortal · Generatore icone</h1>
+  <p class="sub">Apri questo file nel browser, clicca i bottoni e scarica le icone. Nessuna installazione richiesta.</p>
+
+  <h2>Anteprima</h2>
+  <div class="grid" id="preview"></div>
+
+  <h2>Download</h2>
+  <div class="panel">
+    <button id="dlAll">Scarica tutte le icone</button>
+    <button id="dlIco" class="secondary">favicon.ico</button>
+    <button id="dl192" class="secondary">icon-192.png</button>
+    <button id="dl512" class="secondary">icon-512.png</button>
+    <button id="dlApple" class="secondary">apple-touch-icon.png</button>
+    <button id="dlSvg" class="secondary">icon.svg</button>
+  </div>
+
+  <h2>Istruzioni</h2>
+  <div class="panel">
+    <div class="step"><div class="num">1</div><div>Clicca <b>Scarica tutte le icone</b>. Il browser potrebbe chiederti di confermare più download: accetta.</div></div>
+    <div class="step"><div class="num">2</div><div>Sposta i file scaricati nella <b>cartella principale</b> del repository <code>SharingPortal</code> (stessa posizione di <code>index.html</code>).</div></div>
+    <div class="step"><div class="num">3</div><div>Aggiungi il file <code>site.webmanifest</code> (te lo fornisco sotto) nella stessa cartella.</div></div>
+    <div class="step"><div class="num">4</div><div>Aggiorna <code>index.html</code> con le righe fornite per collegare favicon, Apple icon e manifest.</div></div>
+    <div class="step"><div class="num">5</div><div>Commit e push su GitHub. Attendi 1-2 minuti che GitHub Pages aggiorni la cache.</div></div>
+    <div class="hint">
+      <b>Nota:</b> Safari su macOS potrebbe rinominare <code>favicon.ico</code> in <code>favicon-ico</code>. Se succede, rinominalo manualmente in <code>favicon.ico</code>.
+    </div>
+  </div>
+
+</div>
+
+<script>
+'use strict';
+
+/* =====================================================
+   SVG SORGENTE
+   - viewBox 0 0 100 100
+   - sfondo blu #2563eb con angoli arrotondati (rx 22)
+   - aeroplanino bianco PIENO (fill), non outline
+   - padding 15% per lato (plane occupa ~70% del frame)
+   - linea di piega in blu per mantenere l'identità "paper plane"
+===================================================== */
+
+const SVG_SOURCE = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
+  + '<rect width="100" height="100" rx="22" fill="#2563eb"/>'
+  + '<g transform="translate(8 8) scale(3.5)">'
+  +   '<path d="m22 2-7 20-4-9-9-4Z" fill="#ffffff" stroke="#ffffff" stroke-width="0.5" stroke-linejoin="round"/>'
+  +   '<path d="M22 2 11 13" stroke="#2563eb" stroke-width="0.8" fill="none"/>'
+  + '</g>'
+  + '</svg>';
+
+const SVG_DATA_URL = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(SVG_SOURCE);
+
+
+/* =====================================================
+   CARICAMENTO SVG COME IMMAGINE
+===================================================== */
+
+let cachedImage = null;
+
+function loadSvgImage() {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('Impossibile caricare SVG'));
+    img.src = SVG_DATA_URL;
+  });
+}
+
+async function getImage() {
+  if (!cachedImage) cachedImage = await loadSvgImage();
+  return cachedImage;
+}
+
+
+/* =====================================================
+   RENDER SU CANVAS
+===================================================== */
+
+async function renderCanvas(size) {
+  const img = await getImage();
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.clearRect(0, 0, size, size);
+  ctx.drawImage(img, 0, 0, size, size);
+  return canvas;
+}
+
+function canvasToBlob(canvas, mime = 'image/png') {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      blob => blob ? resolve(blob) : reject(new Error('toBlob fallito')),
+      mime
+    );
+  });
+}
+
+
+/* =====================================================
+   DOWNLOAD
+===================================================== */
+
+function triggerDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+
+/* =====================================================
+   FAVICON.ICO MULTI-RISOLUZIONE (16/32/48, PNG embedded)
+   Formato ICO: header 6 byte + N entry (16 byte) + dati PNG
+===================================================== */
+
+async function buildICO(sizes) {
+  const entries = [];
+
+  for (const size of sizes) {
+    const canvas = await renderCanvas(size);
+    const blob = await canvasToBlob(canvas);
+    const data = new Uint8Array(await blob.arrayBuffer());
+    entries.push({ size, data });
+  }
+
+  const N = entries.length;
+  const HEADER = 6;
+  const ENTRY  = 16;
+  const dataStart = HEADER + N * ENTRY;
+
+  let total = dataStart;
+  for (const e of entries) total += e.data.length;
+
+  const out  = new Uint8Array(total);
+  const view = new DataView(out.buffer);
+
+  /* ICONDIR */
+  view.setUint16(0, 0, true);  /* reserved */
+  view.setUint16(2, 1, true);  /* type = icon */
+  view.setUint16(4, N, true);  /* number of images */
+
+  let offset = dataStart;
+
+  for (let i = 0; i < N; i++) {
+    const e   = entries[i];
+    const pos = HEADER + i * ENTRY;
+    out[pos]     = e.size >= 256 ? 0 : e.size;
+    out[pos + 1] = e.size >= 256 ? 0 : e.size;
+    out[pos + 2] = 0; /* palette */
+    out[pos + 3] = 0; /* reserved */
+    view.setUint16(pos + 4, 1, true);              /* color planes */
+    view.setUint16(pos + 6, 32, true);             /* bits per pixel */
+    view.setUint32(pos + 8,  e.data.length, true); /* size */
+    view.setUint32(pos + 12, offset, true);        /* offset */
+    offset += e.data.length;
+  }
+
+  offset = dataStart;
+  for (const e of entries) {
+    out.set(e.data, offset);
+    offset += e.data.length;
+  }
+
+  return new Blob([out], { type: 'image/x-icon' });
+}
+
+
+/* =====================================================
+   PREVIEW
+===================================================== */
+
+async function renderPreview() {
+  const container = document.getElementById('preview');
+  const previews = [
+    { size: 16,  label: '16 × 16'  },
+    { size: 32,  label: '32 × 32'  },
+    { size: 48,  label: '48 × 48'  },
+    { size: 180, label: '180 × 180'},
+    { size: 192, label: '192 × 192'},
+    { size: 512, label: '512 × 512'}
+  ];
+
+  for (const p of previews) {
+    const card = document.createElement('div');
+    card.className = 'card';
+
+    const canvas = await renderCanvas(p.size);
+    const displaySize = Math.min(p.size, 160);
+    canvas.style.width  = displaySize + 'px';
+    canvas.style.height = displaySize + 'px';
+
+    const name = document.createElement('div');
+    name.className = 'name';
+    name.textContent = p.label;
+
+    card.appendChild(canvas);
+    card.appendChild(name);
+    container.appendChild(card);
+  }
+}
+
+
+/* =====================================================
+   AZIONI
+===================================================== */
+
+async function downloadFaviconICO() {
+  const blob = await buildICO([16, 32, 48]);
+  triggerDownload(blob, 'favicon.ico');
+}
+
+async function downloadPNG(size, filename) {
+  const canvas = await renderCanvas(size);
+  const blob = await canvasToBlob(canvas);
+  triggerDownload(blob, filename);
+}
+
+function downloadSVG() {
+  const blob = new Blob([SVG_SOURCE], { type: 'image/svg+xml' });
+  triggerDownload(blob, 'icon.svg');
+}
+
+async function downloadAll() {
+  const btn = document.getElementById('dlAll');
+  btn.disabled = true;
+  btn.textContent = 'Download in corso...';
+  try {
+    await downloadFaviconICO();
+    await new Promise(r => setTimeout(r, 400));
+    await downloadPNG(192, 'icon-192.png');
+    await new Promise(r => setTimeout(r, 400));
+    await downloadPNG(512, 'icon-512.png');
+    await new Promise(r => setTimeout(r, 400));
+    await downloadPNG(180, 'apple-touch-icon.png');
+    await new Promise(r => setTimeout(r, 400));
+    downloadSVG();
+  } catch (err) {
+    alert('Errore durante il download: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Scarica tutte le icone';
+  }
+}
+
+
+/* =====================================================
+   AVVIO
+===================================================== */
+
+renderPreview().catch(err => {
+  console.error(err);
+  document.getElementById('preview').textContent = 'Errore: ' + err.message;
+});
+
+document.getElementById('dlAll').addEventListener('click', downloadAll);
+document.getElementById('dlIco').addEventListener('click', downloadFaviconICO);
+document.getElementById('dl192').addEventListener('click', () => downloadPNG(192, 'icon-192.png'));
+document.getElementById('dl512').addEventListener('click', () => downloadPNG(512, 'icon-512.png'));
+document.getElementById('dlApple').addEventListener('click', () => downloadPNG(180, 'apple-touch-icon.png'));
+document.getElementById('dlSvg').addEventListener('click', downloadSVG);
+</script>
+</body>
+</html>
