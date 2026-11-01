@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#101827">
-<title>SharingPortal 1.7.2</title>
+<title>SharingPortal 1.7.3</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/lucide@latest"></script>
 
@@ -64,11 +64,18 @@ body {
   border-radius:12px;
   color:var(--muted);
   font-weight:600;
+  transition: all .2s;
 }
 .tab.active {
   background:var(--panel2);
   color:var(--text);
   box-shadow:inset 0 0 0 1px var(--line);
+}
+/* Stile per tab disabilitato */
+.tab.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  filter: grayscale(100%);
 }
 .btn {
   border-radius:12px;
@@ -192,7 +199,7 @@ code { font-family:ui-monospace,monospace; }
     <button id="themeBtn" class="btn btn-secondary !p-3" title="Cambia tema">
       <i data-lucide="sun-moon" class="w-5 h-5"></i>
     </button>
-    <!-- Il pulsante parte nascosto, appare solo nel tab Invia -->
+    <!-- Pulsante Dropbox nascosto di default -->
     <button id="connectBtn" class="btn btn-primary flex items-center gap-2 hidden">
       <i data-lucide="cloud" class="w-4 h-4"></i>
       <span>Collega Dropbox</span>
@@ -404,7 +411,7 @@ code { font-family:ui-monospace,monospace; }
 </div>
 
 <footer class="text-center text-xs muted mt-9">
-  SharingPortal · Versione 1.7.2 · Dropbox + Cloudflare Workers ·
+  SharingPortal · Versione 1.7.3 · Dropbox + Cloudflare Workers ·
   Non caricare contenuti riservati: il codice funziona come una chiave di accesso.
 </footer>
 
@@ -479,6 +486,7 @@ function setConnected(ok,sub=''){
     :'<i data-lucide="cloud" class="w-4 h-4"></i><span>Collega Dropbox</span>';
   
   updateDropzoneState();
+  updateNavTabs(); // Aggiorna lo stato visivo del tab Coda
   lucide.createIcons();
 }
 
@@ -508,12 +516,27 @@ function updateDropzoneState() {
   }
 }
 
+function updateNavTabs() {
+  const queueTab = document.querySelector('[data-tab="queue"]');
+  if (!accessToken) {
+    queueTab.classList.add('disabled');
+  } else {
+    queueTab.classList.remove('disabled');
+  }
+}
+
 
 /* =========================================================
    NAVIGAZIONE
 ========================================================= */
 
 function showTab(tab){
+  // Blocca il tab Coda se non connesso
+  if (tab === 'queue' && !accessToken) {
+    toast('Collega Dropbox per visualizzare la coda.');
+    return;
+  }
+
   document.querySelectorAll('[data-tab]').forEach(b=>{
     b.classList.toggle('active', b.dataset.tab===tab);
   });
@@ -534,6 +557,11 @@ function showTab(tab){
 
 document.querySelectorAll('[data-tab]').forEach(b=>{
   b.addEventListener('click',()=>{
+    // Impedisce il click visivo se il tab Coda è disabilitato
+    if (b.dataset.tab === 'queue' && !accessToken) {
+      toast('Collega Dropbox per accedere alla coda.');
+      return;
+    }
     showTab(b.dataset.tab);
   });
 });
@@ -583,6 +611,9 @@ async function connectDropbox(){
   sessionStorage.setItem('sp_pkce_verifier', verifier);
   sessionStorage.setItem('sp_oauth_state', state);
   
+  // SALVA IL TAB ATTUALE COSÌ DOPO IL LOGIN CI RITORNA
+  sessionStorage.setItem('sp_intended_tab', 'send');
+  
   const u=new URL('https://www.dropbox.com/oauth2/authorize');
   const params={ client_id:DROPBOX_APP_KEY, response_type:'code', redirect_uri:REDIRECT_URI,
     token_access_type:'online', code_challenge:challenge, code_challenge_method:'S256', state, scope:SCOPES };
@@ -621,11 +652,11 @@ async function handleOAuth(){
     setConnected(true, 'Account autorizzato. Token valido per questa sessione.');
     toast('Dropbox collegato correttamente.');
     
-    // Se dopo il login l'utente è sul tab invia, sblocca la dropzone
-    if(!$('sendView').classList.contains('hidden-view')){
-       updateDropzoneState();
-    }
-    
+    // LEGGE IL TAB INTENZIONATO E CI TORNA
+    const intendedTab = sessionStorage.getItem('sp_intended_tab') || 'send';
+    sessionStorage.removeItem('sp_intended_tab');
+    showTab(intendedTab);
+
     loadQueue();
   }
   catch(e){
@@ -1169,7 +1200,13 @@ $('refreshQueue').addEventListener('click', loadQueue);
 handleOAuth();
 lucide.createIcons();
 updateDropzoneState(); 
-showTab('receive'); // Tab predefinito
+updateNavTabs(); // Imposta il blocco iniziale sul tab Coda
+
+// All'avvio, se non c'è un login in corso e non c'è un token, vai su Ricevi.
+// Se c'è un token (appena loggato), handleOAuth avrà già impostato il tab corretto.
+if (!sessionStorage.getItem('sp_intended_tab') && !accessToken) {
+  showTab('receive');
+}
 
 })();
 </script>
