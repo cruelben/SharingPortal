@@ -1,502 +1,1691 @@
+
 <!DOCTYPE html>
-<html lang="it" class="dark">
+<html lang="it">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SharingPortal - Condivisione File P2P & Deposito</title>
-  <!-- Tailwind CSS per la grafica -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          colors: {
-            brand: {
-              50: '#f0f9ff',
-              100: '#e0f2fe',
-              400: '#38bdf8',
-              500: '#0ea5e9', // Sky Blue rilassante
-              600: '#0284c7',
-              700: '#0369a1',
-            }
-          }
-        }
-      }
-    }
-  </script>
-  <!-- Lucide Icons per le icone -->
-  <script src="https://unpkg.com/lucide@latest"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#101827">
+<title>SharingPortal</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+
+<style>
+:root {
+  color-scheme: dark;
+  --bg:#0b1220;
+  --panel:#111c2e;
+  --panel2:#17243a;
+  --line:#263750;
+  --text:#e7eef9;
+  --muted:#91a2ba;
+  --accent:#60a5fa;
+}
+body {
+  background:radial-gradient(ellipse at top,#172943 0,#0b1220 55%);
+  color:var(--text);
+  min-height:100vh;
+}
+.light {
+  color-scheme:light;
+  --bg:#f3f6fb;
+  --panel:#fff;
+  --panel2:#eef3fa;
+  --line:#d7e0ed;
+  --text:#172338;
+  --muted:#63748c;
+  --accent:#2563eb;
+  background:linear-gradient(135deg,#f4f7fc,#e9f0fa);
+  color:var(--text);
+}
+.panel {
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:18px;
+}
+.subpanel {
+  background:var(--panel2);
+  border:1px solid var(--line);
+  border-radius:14px;
+}
+.muted { color:var(--muted); }
+.tab {
+  padding:11px 16px;
+  border-radius:12px;
+  color:var(--muted);
+  font-weight:600;
+}
+.tab.active {
+  background:var(--panel2);
+  color:var(--text);
+  box-shadow:inset 0 0 0 1px var(--line);
+}
+.btn {
+  border-radius:12px;
+  padding:11px 16px;
+  font-weight:650;
+  transition:.15s;
+}
+.btn-primary {
+  background:#2563eb;
+  color:white;
+}
+.btn-primary:hover { background:#1d4ed8; }
+.btn-secondary {
+  background:var(--panel2);
+  border:1px solid var(--line);
+  color:var(--text);
+}
+.btn:disabled {
+  opacity:.45;
+  cursor:not-allowed;
+}
+.field {
+  background:var(--bg);
+  border:1px solid var(--line);
+  border-radius:11px;
+  padding:11px 13px;
+  color:var(--text);
+  width:100%;
+  outline:none;
+}
+.field:focus { border-color:var(--accent); }
+.dropzone {
+  border:2px dashed var(--line);
+  border-radius:16px;
+  transition:.2s;
+}
+.dropzone.drag {
+  border-color:var(--accent);
+  background:#2563eb18;
+}
+.progress {
+  height:7px;
+  background:var(--line);
+  border-radius:99px;
+  overflow:hidden;
+}
+.progress>div {
+  height:100%;
+  background:#3b82f6;
+  width:0;
+  transition:width .2s;
+}
+.hidden-view { display:none; }
+.toast {
+  position:fixed;
+  right:18px;
+  bottom:18px;
+  z-index:50;
+  max-width:min(420px,calc(100vw - 36px));
+  padding:13px 16px;
+  border-radius:12px;
+  background:#17243a;
+  border:1px solid #344761;
+  color:#eef5ff;
+  box-shadow:0 12px 40px #0005;
+}
+code { font-family:ui-monospace,monospace; }
+</style>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans transition-colors duration-200" id="body-app">
 
-  <!-- Header / Top Bar -->
-  <header class="border-b border-slate-800 bg-slate-950/60 backdrop-blur-md sticky top-0 z-40">
-    <div class="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-sky-400 flex items-center justify-center text-white shadow-lg shadow-brand-500/20">
-          <i data-lucide="share-2" class="w-5 h-5"></i>
-        </div>
-        <div>
-          <h1 class="font-bold text-xl tracking-tight bg-gradient-to-r from-white to-sky-200 bg-clip-text text-transparent">SharingPortal</h1>
-          <p class="text-xs text-slate-400">Trasferimento diretto & Deposito anonimo</p>
-        </div>
-      </div>
+<body class="min-h-screen">
 
-      <!-- Pulsante Opzioni -->
-      <button onclick="toggleOptionsModal()" class="p-2.5 rounded-xl border border-slate-800 bg-slate-900/80 hover:bg-slate-800 text-slate-300 transition flex items-center gap-2 text-sm">
-        <i data-lucide="settings" class="w-4 h-4"></i>
-        <span class="hidden sm:inline" id="txt-opt-btn">Opzioni</span>
-      </button>
+<div class="max-w-5xl mx-auto px-4 py-7 md:py-10">
+
+<header class="flex items-center justify-between gap-4 mb-8">
+  <div class="flex items-center gap-3">
+    <div class="w-12 h-12 rounded-2xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-900/30">
+      <i data-lucide="send" class="w-6 h-6 text-white"></i>
     </div>
-  </header>
-
-  <!-- Main Content -->
-  <main class="flex-1 max-w-4xl w-full mx-auto p-4 flex flex-col gap-6">
-
-    <!-- Tab Navigation -->
-    <div class="grid grid-cols-3 p-1.5 bg-slate-950 border border-slate-800/80 rounded-2xl gap-1">
-      <button onclick="switchTab('send')" id="tab-send" class="py-3 px-4 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition bg-brand-600 text-white shadow-md">
-        <i data-lucide="upload" class="w-4 h-4"></i>
-        <span id="txt-tab-send">Invia</span>
-      </button>
-      <button onclick="switchTab('receive')" id="tab-receive" class="py-3 px-4 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition text-slate-400 hover:text-white">
-        <i data-lucide="download" class="w-4 h-4"></i>
-        <span id="txt-tab-receive">Ricevi</span>
-      </button>
-      <button onclick="switchTab('queue')" id="tab-queue" class="py-3 px-4 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition text-slate-400 hover:text-white relative">
-        <i data-lucide="layers" class="w-4 h-4"></i>
-        <span id="txt-tab-queue">Coda</span>
-        <span id="queue-badge" class="hidden absolute top-2 right-2 w-2 h-2 rounded-full bg-brand-400"></span>
-      </button>
-    </div>
-
-    <!-- TAB 1: INVIA -->
-    <section id="content-send" class="flex flex-col gap-5">
-      <div class="border-2 border-dashed border-slate-800 hover:border-brand-500/50 rounded-3xl p-8 bg-slate-950/40 text-center transition flex flex-col items-center justify-center gap-4 cursor-pointer relative" id="drop-zone">
-        <input type="file" id="file-input" class="hidden" multiple onchange="handleFileSelect(event)">
-        <div class="w-16 h-16 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-brand-400">
-          <i data-lucide="file-up" class="w-8 h-8"></i>
-        </div>
-        <div>
-          <p class="font-medium text-slate-200" id="txt-drag-title">Trascina qui i file oppure <span class="text-brand-400 underline">sfoglia</span></p>
-          <p class="text-xs text-slate-500 mt-1" id="selected-file-name">Nessun file selezionato</p>
-        </div>
-      </div>
-
-      <div class="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-5 flex flex-col gap-4">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <label class="block text-sm font-medium text-slate-300" id="txt-code-label">Codice Riscossione (es. pippo)</label>
-            <p class="text-xs text-slate-500" id="txt-code-desc">Servirà a chi riceve per scaricare i file</p>
-          </div>
-          <div class="flex gap-2">
-            <input type="text" id="send-code" value="1234" maxlength="30" class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-sm font-mono tracking-wider text-brand-400 focus:outline-none focus:border-brand-500 w-44 text-center">
-            <button onclick="generateRandomCode()" class="p-2.5 bg-slate-900 border border-slate-800 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white" title="Genera casuale">
-              <i data-lucide="refresh-cw" class="w-4 h-4"></i>
-            </button>
-          </div>
-        </div>
-
-        <hr class="border-slate-800/60">
-
-        <!-- Switch Deposito -->
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-3">
-            <div class="p-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-400">
-              <i data-lucide="hard-drive" class="w-4 h-4"></i>
-            </div>
-            <div>
-              <p class="text-sm font-medium text-slate-200" id="txt-deposit-title">Abilita Deposito Temporaneo</p>
-              <p class="text-xs text-slate-500" id="txt-deposit-desc">Upload tramite Catbox. Limite operativo del Worker: circa 95 MB per file.</p>
-            </div>
-          </div>
-          <label class="relative inline-flex items-center cursor-pointer">
-            <input type="checkbox" id="deposit-toggle" class="sr-only peer" checked>
-            <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-600"></div>
-          </label>
-        </div>
-      </div>
-
-      <button onclick="startUploadProcess()" class="w-full py-4 bg-brand-600 hover:bg-brand-500 text-white font-semibold rounded-2xl shadow-lg shadow-brand-600/20 transition flex items-center justify-center gap-2">
-        <i data-lucide="send" class="w-5 h-5"></i>
-        <span id="txt-btn-start-send">Avvia Invio</span>
-      </button>
-    </section>
-
-    <!-- TAB 2: RICEVI -->
-    <section id="content-receive" class="hidden flex-col gap-5">
-      <div class="bg-slate-950/60 border border-slate-800/80 rounded-3xl p-8 text-center flex flex-col items-center gap-6">
-        <div class="w-16 h-16 rounded-2xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-brand-400">
-          <i data-lucide="key-round" class="w-8 h-8"></i>
-        </div>
-        <div class="max-w-md">
-          <h2 class="text-lg font-semibold text-slate-200" id="txt-receive-title">Inserisci il Codice</h2>
-          <p class="text-xs text-slate-400 mt-1" id="txt-receive-desc">Digita il codice fornito dal mittente per riscattare i file.</p>
-        </div>
-
-        <div class="w-full max-w-xs flex flex-col gap-3">
-          <input type="text" id="receive-code" placeholder="CODICE" maxlength="30" class="w-full bg-slate-900 border border-slate-800 rounded-2xl px-5 py-3.5 text-center font-mono text-lg tracking-widest text-brand-400 focus:outline-none focus:border-brand-500">
-          <button onclick="startDownloadProcess()" class="w-full py-3.5 bg-brand-600 hover:bg-brand-500 text-white font-medium rounded-2xl shadow-lg shadow-brand-600/20 transition flex items-center justify-center gap-2">
-            <i data-lucide="download-cloud" class="w-5 h-5"></i>
-            <span id="txt-btn-receive">Scarica File</span>
-          </button>
-        </div>
-      </div>
-    </section>
-
-    <!-- TAB 3: CODA -->
-    <section id="content-queue" class="hidden flex-col gap-4">
-      <div class="flex items-center justify-between px-1">
-        <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider" id="txt-queue-header">File nel tuo Deposito</h2>
-        <span class="text-xs text-slate-500" id="queue-count">0 file</span>
-      </div>
-
-      <div id="queue-list" class="flex flex-col gap-3">
-        <div id="empty-queue-msg" class="bg-slate-950/40 border border-slate-800/60 rounded-2xl p-8 text-center text-slate-500 text-sm">
-          Nessun file presente nel tuo deposito locale.
-        </div>
-      </div>
-    </section>
-
-  </main>
-
-  <!-- Footer con Versione Progressiva -->
-  <footer class="py-4 text-center text-xs text-slate-500 border-t border-slate-800/40 mt-auto">
-    SharingPortal • Versione <span id="app-version">1.4.0</span>
-  </footer>
-
-  <!-- MODALE OPZIONI -->
-  <div id="options-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 flex flex-col gap-5 shadow-2xl">
-      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
-        <h3 class="font-bold text-lg text-slate-100 flex items-center gap-2">
-          <i data-lucide="sliders" class="w-5 h-5 text-brand-400"></i>
-          Impostazioni SharingPortal
-        </h3>
-        <button onclick="toggleOptionsModal()" class="text-slate-400 hover:text-white p-1">
-          <i data-lucide="x" class="w-5 h-5"></i>
-        </button>
-      </div>
-
-      <div class="flex flex-col gap-4">
-        <!-- Tema Visivo -->
-        <div class="flex items-center justify-between">
-          <span class="text-sm font-medium text-slate-300">Tema Visivo</span>
-          <select id="opt-theme" onchange="changeTheme(this.value)" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-sm text-slate-200">
-            <option value="dark">Scuro (Default)</option>
-            <option value="light">Chiaro (Blu / Ardesia)</option>
-          </select>
-        </div>
-
-        <!-- Lingua -->
-        <div class="flex items-center justify-between">
-          <span class="text-sm font-medium text-slate-300">Lingua Interfaccia</span>
-          <select id="opt-lang" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-sm text-slate-200">
-            <option value="auto">Auto (Browser)</option>
-            <option value="it">Italiano</option>
-            <option value="en">English</option>
-          </select>
-        </div>
-
-        <!-- Dimensione Massima (Default 1 GB) -->
-        <div class="flex items-center justify-between">
-          <span class="text-sm font-medium text-slate-300">Limite Deposito</span>
-          <select id="opt-max-size" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-sm text-slate-200">
-            <option value="1000" selected>1 GB (Default)</option>
-            <option value="500">500 MB</option>
-            <option value="2000">2 GB</option>
-          </select>
-        </div>
-
-        <!-- Notifiche Audio -->
-        <div class="flex items-center justify-between">
-          <span class="text-sm font-medium text-slate-300">Notifiche Suono</span>
-          <input type="checkbox" id="opt-sound" checked class="w-4 h-4 accent-brand-600">
-        </div>
-      </div>
-
-      <button onclick="toggleOptionsModal()" class="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white font-medium rounded-xl transition text-sm mt-2">
-        Salva e Chiudi
-      </button>
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight">SharingPortal</h1>
+      <p class="text-sm muted">Send files. Share a code. Retrieve anywhere.</p>
     </div>
   </div>
 
-  <!-- SCRIPT LOGICO SHARINGPORTAL -->
-  <script>
-    let selectedFilesArray = [];
+  <div class="flex items-center gap-2">
+    <button id="themeBtn" class="btn btn-secondary !p-3" title="Cambia tema">
+      <i data-lucide="sun-moon" class="w-5 h-5"></i>
+    </button>
+    <button id="connectBtn" class="btn btn-primary flex items-center gap-2">
+      <i data-lucide="cloud" class="w-4 h-4"></i>
+      <span>Collega Dropbox</span>
+    </button>
+  </div>
+</header>
 
-    // URL del Cloudflare Worker che inoltra i file a Catbox.
-    const UPLOAD_API_URL = "https://sharingportal-upload.cruelben.workers.dev/upload";
+<div class="panel p-4 md:p-5 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-3">
+  <div class="flex items-center gap-3">
+    <div id="connectionDot" class="w-2.5 h-2.5 rounded-full bg-amber-400"></div>
+    <div>
+      <div id="connectionTitle" class="font-semibold">Dropbox non collegato</div>
+      <div id="connectionSub" class="text-sm muted">
+        Collega il tuo account per inviare file.
+      </div>
+    </div>
+  </div>
+  <div class="text-xs muted">
+    Storage: Dropbox · Codici condivisi: Cloudflare KV
+  </div>
+</div>
 
-    function readQueue() {
-      try {
-        const value = JSON.parse(localStorage.getItem('sharingportal_queue') || "[]");
-        return Array.isArray(value) ? value : [];
-      } catch (error) {
-        console.error("Coda locale non leggibile:", error);
-        return [];
-      }
-    }
+<nav class="flex gap-2 p-1.5 rounded-2xl panel mb-6">
+  <button class="tab active flex-1" data-tab="send">
+    <i data-lucide="upload" class="inline w-4 h-4 mr-1"></i>Invia
+  </button>
+  <button class="tab flex-1" data-tab="receive">
+    <i data-lucide="download" class="inline w-4 h-4 mr-1"></i>Ricevi
+  </button>
+  <button class="tab flex-1" data-tab="queue">
+    <i data-lucide="list" class="inline w-4 h-4 mr-1"></i>Coda
+  </button>
+</nav>
 
-    function escapeHtml(value) {
-      return String(value ?? "").replace(/[&<>\"']/g, char => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', "'": '&#39;'
-      })[char]);
-    }
+<!-- INVIA -->
+<section id="sendView" class="space-y-5">
 
-    // Restituisce il link diretto Catbox. Mantiene compatibilità con
-    // eventuali vecchi elementi Pixeldrain già presenti nella coda locale.
-    function getFileUrl(item) {
-      if (item.url && /^https:\/\/files\.catbox\.moe\//i.test(item.url)) return item.url;
-      if (item.id) return `https://${item.host || "pixeldrain.net"}/u/${encodeURIComponent(item.id)}`;
-      return "#";
-    }
+  <div class="panel p-5 md:p-7">
 
-    // Inizializzazione Lucide Icons
-    lucide.createIcons();
+    <div class="mb-5">
+      <h2 class="text-xl font-bold">Invia i tuoi file</h2>
+      <p class="muted text-sm mt-1">
+        Seleziona uno o più file. Ogni file riceverà un codice di riscossione.
+      </p>
+    </div>
 
-    // Inizializzazione Token Utente Locale
-    if (!localStorage.getItem('sharingportal_user_token')) {
-      localStorage.setItem('sharingportal_user_token', 'token_' + Math.random().toString(36).substring(2, 9));
-    }
+    <div id="dropzone" class="dropzone p-8 md:p-12 text-center cursor-pointer">
 
-    // Gestione Tab Navigation
-    function switchTab(tab) {
-      document.getElementById('content-send').classList.add('hidden');
-      document.getElementById('content-receive').classList.add('hidden');
-      document.getElementById('content-queue').classList.add('hidden');
+      <input id="fileInput" type="file" multiple class="hidden">
 
-      document.getElementById('tab-send').className = "py-3 px-4 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition text-slate-400 hover:text-white";
-      document.getElementById('tab-receive').className = "py-3 px-4 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition text-slate-400 hover:text-white";
-      document.getElementById('tab-queue').className = "py-3 px-4 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition text-slate-400 hover:text-white relative";
+      <div class="w-14 h-14 mx-auto rounded-2xl bg-blue-500/15 text-blue-400 flex items-center justify-center mb-4">
+        <i data-lucide="files" class="w-7 h-7"></i>
+      </div>
 
-      document.getElementById('content-' + tab).classList.remove('hidden');
-      document.getElementById('content-' + tab).classList.add('flex');
+      <div class="font-semibold text-lg">Trascina qui i file</div>
+      <p class="muted text-sm mt-1">
+        oppure fai clic per selezionarli dal dispositivo
+      </p>
 
-      const activeTabBtn = document.getElementById('tab-' + tab);
-      activeTabBtn.className = "py-3 px-4 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition bg-brand-600 text-white shadow-md";
+      <button id="browseBtn" class="btn btn-secondary mt-5">
+        Seleziona file
+      </button>
 
-      if (tab === 'queue') renderQueueList();
-    }
+    </div>
 
-    // Modale Opzioni
-    function toggleOptionsModal() {
-      const modal = document.getElementById('options-modal');
-      modal.classList.toggle('hidden');
-      modal.classList.toggle('flex');
-    }
+    <div id="selectedWrap" class="hidden mt-5">
 
-    // Cambio Tema (Dark vs Light Blu/Ardesia Rilassante)
-    function changeTheme(theme) {
-      const body = document.getElementById('body-app');
-      if (theme === 'light') {
-        document.documentElement.classList.remove('dark');
-        body.className = "bg-slate-100 text-slate-800 min-h-screen flex flex-col font-sans transition-colors duration-200";
-      } else {
-        document.documentElement.classList.add('dark');
-        body.className = "bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans transition-colors duration-200";
-      }
-    }
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="font-semibold">
+          File selezionati <span id="fileCount" class="muted"></span>
+        </h3>
+        <button id="clearFiles" class="text-sm text-red-400">
+          Rimuovi tutti
+        </button>
+      </div>
 
-    // Generazione Codice Casuale
-    function generateRandomCode() {
-      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-      let result = '';
-      for (let i = 0; i < 5; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-      document.getElementById('send-code').value = result;
-    }
+      <div id="selectedFiles" class="space-y-2"></div>
 
-    // Gestione Selezione MULTI-FILE
-    document.getElementById('drop-zone').addEventListener('click', () => document.getElementById('file-input').click());
-    
-    function handleFileSelect(e) {
-      const files = Array.from(e.target.files);
-      if (files.length > 0) {
-        selectedFilesArray = files;
-        if (files.length === 1) {
-          document.getElementById('selected-file-name').innerText = `${files[0].name} (${(files[0].size / (1024*1024)).toFixed(2)} MB)`;
-        } else {
-          const totalSize = (files.reduce((acc, f) => acc + f.size, 0) / (1024*1024)).toFixed(2);
-          document.getElementById('selected-file-name').innerText = `${files.length} file selezionati (${totalSize} MB complessivi)`;
-        }
-      }
-    }
-
-    // LOGICA CARICAMENTO DEPOSITO
-    // Il browser invia al Worker i campi multipart richiesti da Catbox.
-    async function startUploadProcess() {
-      if (selectedFilesArray.length === 0) {
-        alert("Seleziona almeno un file da inviare!");
-        return;
-      }
-
-      const code = document.getElementById('send-code').value.trim();
-      const isDeposit = document.getElementById('deposit-toggle').checked;
-      const statusLabel = document.getElementById('selected-file-name');
-      const startButton = document.querySelector("button[onclick=\"startUploadProcess()\"]");
-
-      if (!code) {
-        alert("Inserisci un codice valido per la riscossione!");
-        return;
-      }
-
-      if (!isDeposit) {
-        alert("La modalità P2P diretto non è ancora implementata in questa versione. Attiva il Deposito Temporaneo per caricare i file.");
-        return;
-      }
-
-      if (!UPLOAD_API_URL || !UPLOAD_API_URL.startsWith("https://")) {
-        alert("L'indirizzo del Cloudflare Worker non è configurato correttamente.");
-        return;
-      }
-
-      const filesToUpload = [...selectedFilesArray];
-      const failedFiles = [];
-      const errors = [];
-      let uploadedCount = 0;
-      const queue = readQueue();
-
-      if (startButton) startButton.disabled = true;
-
-      try {
-        for (let index = 0; index < filesToUpload.length; index++) {
-          const file = filesToUpload[index];
-          statusLabel.innerText = `Caricamento ${index + 1}/${filesToUpload.length}: ${file.name}`;
-
-          const formData = new FormData();
-          formData.append("reqtype", "fileupload");
-          formData.append("fileToUpload", file, file.name);
-
-          try {
-            const response = await fetch(UPLOAD_API_URL, {
-              method: "POST",
-              body: formData
-            });
-
-            const responseText = await response.text();
-            let data;
-            try {
-              data = responseText ? JSON.parse(responseText) : {};
-            } catch (parseError) {
-              throw new Error(`Risposta non valida dal server (HTTP ${response.status}): ${responseText.slice(0, 240)}`);
-            }
-
-            if (!response.ok) {
-              const serverMessage = data.error || data.message || data.value || responseText || `HTTP ${response.status}`;
-              throw new Error(String(serverMessage));
-            }
-
-            if (!data || typeof data.url !== "string" || !/^https:\/\/files\.catbox\.moe\//i.test(data.url)) {
-              throw new Error(data.error || data.message || "Catbox non ha restituito un link file valido.");
-            }
-
-            queue.push({
-              url: data.url,
-              code: code,
-              name: file.name,
-              size: (file.size / (1024 * 1024)).toFixed(2) + " MB",
-              date: new Date().toLocaleDateString('it-IT')
-            });
-            localStorage.setItem('sharingportal_queue', JSON.stringify(queue));
-            uploadedCount++;
-          } catch (err) {
-            console.error("Errore invio file:", file.name, err);
-            failedFiles.push(file);
-            errors.push(`${file.name}: ${err.message || err}`);
-          }
-        }
-      } finally {
-        if (startButton) startButton.disabled = false;
-      }
-
-      // Conserva nella selezione solo i file che non sono riusciti a partire.
-      selectedFilesArray = failedFiles;
-
-      if (failedFiles.length === 0) {
-        statusLabel.innerText = "Nessun file selezionato";
-        document.getElementById('file-input').value = "";
-        alert(`Operazione completata!\nCaricati ${uploadedCount} file con codice: ${code}`);
-        switchTab('queue');
-      } else {
-        statusLabel.innerText = `${uploadedCount} caricati; ${failedFiles.length} da riprovare.`;
-        const detail = errors.slice(0, 3).join("\n");
-        const extra = errors.length > 3 ? `\n...e altri ${errors.length - 3} errori.` : "";
-        alert(
-          uploadedCount > 0
-            ? `Caricamento parziale.\nFile caricati: ${uploadedCount}\nFile da riprovare: ${failedFiles.length}\n\nDettagli:\n${detail}${extra}`
-            : `Nessun file caricato.\n\n${detail}${extra}\n\nControlla l'indirizzo del Worker e riprova.`
-        );
-        if (uploadedCount > 0) renderQueueList();
-      }
-    }
-
-    // LOGICA SCARICAMENTO DEPOSITO
-    async function startDownloadProcess() {
-      const code = document.getElementById('receive-code').value.trim();
-      if (!code) {
-        alert("Inserisci un codice per scaricare!");
-        return;
-      }
-
-      const queue = readQueue();
-      const found = queue.find(item => String(item.code || "").toLowerCase() === code.toLowerCase());
-
-      if (found) {
-        const fileUrl = getFileUrl(found);
-        if (fileUrl !== "#") window.open(fileUrl, '_blank', 'noopener');
-      } else {
-        alert(`Nessun file trovato nella coda di questo browser con il codice '${code}'. La ricerca tramite codice su un altro dispositivo non è ancora implementata.`);
-      }
-    }
-
-    // Rendering Coda Locale
-    function renderQueueList() {
-      const queue = readQueue();
-      const listContainer = document.getElementById('queue-list');
-      const countLabel = document.getElementById('queue-count');
-
-      countLabel.innerText = `${queue.length} file`;
-
-      if (queue.length === 0) {
-        listContainer.innerHTML = `<div class="bg-slate-950/40 border border-slate-800/60 rounded-2xl p-8 text-center text-slate-500 text-sm">Nessun file presente nel tuo deposito locale.</div>`;
-        return;
-      }
-
-      listContainer.innerHTML = queue.map((item, index) => `
-        <div class="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-4 flex items-center justify-between gap-4">
-          <div class="flex items-center gap-3 overflow-hidden">
-            <div class="p-2.5 rounded-xl bg-brand-500/10 border border-brand-500/20 text-brand-400 flex-shrink-0">
-              <i data-lucide="file-check" class="w-5 h-5"></i>
-            </div>
-            <div class="truncate">
-              <p class="text-sm font-medium text-slate-200 truncate">${escapeHtml(item.name)}</p>
-              <p class="text-xs text-slate-500">Codice: <span class="font-mono text-brand-400 font-bold">${escapeHtml(item.code)}</span> • ${escapeHtml(item.size)}</p>
-            </div>
-          </div>
-          <div class="flex items-center gap-2">
-            <a href="${escapeHtml(getFileUrl(item))}" target="_blank" rel="noopener noreferrer" class="p-2 rounded-xl bg-brand-500/10 hover:bg-brand-500/20 text-brand-400 border border-brand-500/20 transition flex-shrink-0" title="Scarica file">
-              <i data-lucide="download" class="w-4 h-4"></i>
-            </a>
-            <button onclick="removeFromQueue(${index})" class="p-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition flex-shrink-0" title="Elimina dal deposito">
-              <i data-lucide="trash-2" class="w-4 h-4"></i>
-            </button>
-          </div>
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-5">
+        <div class="text-sm muted">
+          I file vengono caricati direttamente nel tuo Dropbox.
         </div>
+
+        <button id="uploadBtn" class="btn btn-primary flex items-center justify-center gap-2">
+          <i data-lucide="upload-cloud" class="w-4 h-4"></i>
+          Carica e genera codici
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <div id="uploadStatus" class="hidden panel p-5">
+    <div class="flex items-center justify-between gap-3 mb-2">
+      <div id="uploadStatusText" class="font-semibold">Preparazione...</div>
+      <div id="uploadPercent" class="text-sm muted">0%</div>
+    </div>
+    <div class="progress">
+      <div id="uploadProgress"></div>
+    </div>
+    <div id="uploadDetails" class="text-xs muted mt-2"></div>
+  </div>
+
+  <div id="newCodes" class="hidden panel p-5">
+    <h3 class="font-bold text-lg mb-1">File pronti per il ritiro</h3>
+    <p class="text-sm muted mb-4">
+      Condividi il codice con il destinatario. Chiunque lo conosca può accedere al link del file.
+    </p>
+    <div id="newCodesList" class="space-y-3"></div>
+  </div>
+
+</section>
+
+<!-- RICEVI -->
+<section id="receiveView" class="hidden-view space-y-5">
+
+  <div class="panel p-5 md:p-7">
+
+    <h2 class="text-xl font-bold">Ricevi un file</h2>
+
+    <p class="muted text-sm mt-1 mb-5">
+      Inserisci il codice ricevuto dal mittente.
+    </p>
+
+    <form id="redeemForm" class="flex flex-col sm:flex-row gap-3">
+
+      <input
+        id="redeemCode"
+        class="field uppercase tracking-[.25em] font-bold text-center sm:text-left"
+        maxlength="12"
+        placeholder="ES. A7K9Q"
+        autocomplete="off"
+        required
+      >
+
+      <button class="btn btn-primary whitespace-nowrap" type="submit">
+        Cerca file
+      </button>
+
+    </form>
+
+    <div id="redeemResult" class="mt-5"></div>
+
+  </div>
+
+</section>
+
+<!-- CODA -->
+<section id="queueView" class="hidden-view space-y-5">
+
+  <div class="panel p-5 md:p-7">
+
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+
+      <div>
+        <h2 class="text-xl font-bold">La tua coda</h2>
+        <p class="muted text-sm mt-1">
+          Elenco dei file registrati dal tuo account Dropbox.
+        </p>
+      </div>
+
+      <button id="refreshQueue" class="btn btn-secondary">
+        Aggiorna elenco
+      </button>
+
+    </div>
+
+    <div id="queueInfo" class="text-sm muted mb-3">
+      Collega Dropbox per visualizzare i tuoi invii.
+    </div>
+
+    <div id="queueList" class="space-y-2"></div>
+
+  </div>
+
+</section>
+
+<footer class="text-center text-xs muted mt-9">
+  SharingPortal · Dropbox + Cloudflare Workers ·
+  Non caricare contenuti riservati: il codice funziona come una chiave di accesso.
+</footer>
+
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script>
+(() => {
+
+'use strict';
+
+/* =========================================================
+   CONFIGURAZIONE
+========================================================= */
+
+const DROPBOX_APP_KEY = 'pjr4dcuo0wcdfpb';
+
+const REDIRECT_URI =
+  'https://cruelben.github.io/SharingPortal/';
+
+const WORKER_URL =
+  'https://sharingportal-upload.cruelben.workers.dev';
+
+const SCOPES =
+  'files.content.write sharing.write account_info.read';
+
+const CHUNK_SIZE = 8 * 1024 * 1024;
+
+let accessToken = null;
+let accountName = '';
+let selectedFiles = [];
+let queueItems = [];
+
+
+/* =========================================================
+   FUNZIONI GENERALI
+========================================================= */
+
+const $ = id => document.getElementById(id);
+
+const fmtSize = n => {
+
+  if(n < 1024) return n+' B';
+
+  if(n < 1048576)
+    return (n/1024).toFixed(1)+' KB';
+
+  if(n < 1073741824)
+    return (n/1048576).toFixed(1)+' MB';
+
+  return (n/1073741824).toFixed(2)+' GB';
+
+};
+
+const esc = s =>
+  String(s ?? '').replace(/[&<>"']/g,c=>({
+    '&':'&amp;',
+    '<':'&lt;',
+    '>':'&gt;',
+    '"':'&quot;',
+    "'":'&#39;'
+  }[c]));
+
+function toast(msg,ms=3600){
+
+  const t=$('toast');
+
+  t.textContent=msg;
+  t.classList.remove('hidden');
+
+  clearTimeout(toast.timer);
+
+  toast.timer=setTimeout(
+    ()=>t.classList.add('hidden'),
+    ms
+  );
+
+}
+
+function setConnected(ok,sub=''){
+
+  $('connectionDot').className =
+    'w-2.5 h-2.5 rounded-full '+
+    (ok?'bg-emerald-400':'bg-amber-400');
+
+  $('connectionTitle').textContent =
+    ok?'Dropbox collegato'+
+    (accountName?' · '+accountName:''):
+    'Dropbox non collegato';
+
+  $('connectionSub').textContent =
+    sub ||
+    (ok
+      ?'Pronto per caricare i file.'
+      :'Collega il tuo account per inviare file.');
+
+  $('connectBtn').innerHTML = ok
+    ?'<i data-lucide="check-circle" class="w-4 h-4"></i><span>Dropbox collegato</span>'
+    :'<i data-lucide="cloud" class="w-4 h-4"></i><span>Collega Dropbox</span>';
+
+  lucide.createIcons();
+
+}
+
+
+/* =========================================================
+   NAVIGAZIONE
+========================================================= */
+
+function showTab(tab){
+
+  document.querySelectorAll('[data-tab]')
+    .forEach(b=>{
+      b.classList.toggle(
+        'active',
+        b.dataset.tab===tab
+      );
+    });
+
+  ['send','receive','queue'].forEach(x=>{
+    $(x+'View').classList.toggle(
+      'hidden-view',
+      x!==tab
+    );
+  });
+
+}
+
+document.querySelectorAll('[data-tab]')
+  .forEach(b=>{
+    b.addEventListener('click',()=>{
+      showTab(b.dataset.tab);
+
+      if(b.dataset.tab==='queue')
+        loadQueue();
+    });
+  });
+
+
+/* =========================================================
+   TEMA
+========================================================= */
+
+$('themeBtn').addEventListener('click',()=>{
+
+  document.body.classList.toggle('light');
+
+  localStorage.setItem(
+    'sp_theme',
+    document.body.classList.contains('light')
+      ?'light'
+      :'dark'
+  );
+
+});
+
+if(localStorage.getItem('sp_theme')==='light')
+  document.body.classList.add('light');
+
+
+/* =========================================================
+   DROPBOX OAUTH PKCE
+========================================================= */
+
+function randomString(len=64){
+
+  const a=new Uint8Array(len);
+
+  crypto.getRandomValues(a);
+
+  const chars =
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+
+  return Array.from(
+    a,
+    b=>chars[b%chars.length]
+  ).join('');
+
+}
+
+function base64url(buf){
+
+  return btoa(
+    String.fromCharCode(...new Uint8Array(buf))
+  )
+  .replace(/\+/g,'-')
+  .replace(/\//g,'_')
+  .replace(/=+$/,'');
+
+}
+
+async function sha256(s){
+
+  return base64url(
+    await crypto.subtle.digest(
+      'SHA-256',
+      new TextEncoder().encode(s)
+    )
+  );
+
+}
+
+async function connectDropbox(){
+
+  const verifier=randomString(64);
+  const state=randomString(24);
+
+  const challenge=await sha256(verifier);
+
+  sessionStorage.setItem(
+    'sp_pkce_verifier',
+    verifier
+  );
+
+  sessionStorage.setItem(
+    'sp_oauth_state',
+    state
+  );
+
+  const u=new URL(
+    'https://www.dropbox.com/oauth2/authorize'
+  );
+
+  const params={
+
+    client_id:DROPBOX_APP_KEY,
+
+    response_type:'code',
+
+    redirect_uri:REDIRECT_URI,
+
+    token_access_type:'online',
+
+    code_challenge:challenge,
+
+    code_challenge_method:'S256',
+
+    state,
+
+    scope:SCOPES
+
+  };
+
+  Object.entries(params).forEach(([k,v])=>{
+    u.searchParams.set(k,v);
+  });
+
+  location.href=u.toString();
+
+}
+
+
+async function handleOAuth(){
+
+  const p=new URLSearchParams(location.search);
+
+  const code=p.get('code');
+
+  if(!code) return;
+
+  const state=p.get('state');
+
+  const savedState=
+    sessionStorage.getItem('sp_oauth_state');
+
+  const verifier=
+    sessionStorage.getItem('sp_pkce_verifier');
+
+  history.replaceState(
+    {},
+    document.title,
+    location.pathname
+  );
+
+  if(!state || state!==savedState || !verifier){
+
+    toast('Autorizzazione non valida: riprova a collegare Dropbox.');
+
+    return;
+
+  }
+
+  sessionStorage.removeItem('sp_oauth_state');
+  sessionStorage.removeItem('sp_pkce_verifier');
+
+  try{
+
+    const body=new URLSearchParams({
+
+      code,
+
+      grant_type:'authorization_code',
+
+      client_id:DROPBOX_APP_KEY,
+
+      redirect_uri:REDIRECT_URI,
+
+      code_verifier:verifier
+
+    });
+
+    const r=await fetch(
+      'https://api.dropboxapi.com/oauth2/token',
+      {
+        method:'POST',
+        headers:{
+          'Content-Type':'application/x-www-form-urlencoded'
+        },
+        body
+      }
+    );
+
+    const d=await r.json();
+
+    if(!r.ok)
+      throw new Error(
+        d.error_description ||
+        d.error ||
+        'Token Dropbox non ottenuto'
+      );
+
+    accessToken=d.access_token;
+
+    await identifyAccount();
+
+    setConnected(
+      true,
+      'Account autorizzato. Token valido per questa sessione del browser.'
+    );
+
+    toast('Dropbox collegato correttamente.');
+
+    loadQueue();
+
+  }
+  catch(e){
+
+    console.error(e);
+
+    toast(
+      'Errore collegamento Dropbox: '+e.message,
+      6000
+    );
+
+  }
+
+}
+
+
+async function identifyAccount(){
+
+  const r=await fetch(
+    'https://api.dropboxapi.com/2/users/get_current_account',
+    {
+      method:'POST',
+      headers:{
+        Authorization:'Bearer '+accessToken
+      }
+    }
+  );
+
+  const d=await r.json();
+
+  if(!r.ok)
+    throw new Error(
+      d.error_summary ||
+      'Impossibile leggere account Dropbox'
+    );
+
+  accountName=
+    d.name?.display_name ||
+    d.email ||
+    '';
+
+}
+
+$('connectBtn').addEventListener(
+  'click',
+  ()=>{
+    if(!accessToken)
+      connectDropbox();
+    else
+      toast('Dropbox è già collegato in questa sessione.');
+  }
+);
+
+
+/* =========================================================
+   SELEZIONE FILE
+========================================================= */
+
+$('browseBtn').addEventListener(
+  'click',
+  ()=>$('fileInput').click()
+);
+
+$('dropzone').addEventListener(
+  'click',
+  e=>{
+    if(e.target.id!=='browseBtn')
+      $('fileInput').click();
+  }
+);
+
+$('fileInput').addEventListener(
+  'change',
+  e=>addFiles([...e.target.files])
+);
+
+['dragenter','dragover'].forEach(ev=>{
+
+  $('dropzone').addEventListener(ev,e=>{
+
+    e.preventDefault();
+
+    $('dropzone').classList.add('drag');
+
+  });
+
+});
+
+['dragleave','drop'].forEach(ev=>{
+
+  $('dropzone').addEventListener(ev,e=>{
+
+    e.preventDefault();
+
+    $('dropzone').classList.remove('drag');
+
+  });
+
+});
+
+$('dropzone').addEventListener(
+  'drop',
+  e=>addFiles([...e.dataTransfer.files])
+);
+
+
+function addFiles(files){
+
+  if(!files.length) return;
+
+  selectedFiles.push(...files);
+
+  renderSelected();
+
+}
+
+
+function renderSelected(){
+
+  $('selectedWrap').classList.toggle(
+    'hidden',
+    !selectedFiles.length
+  );
+
+  $('fileCount').textContent=
+    '('+selectedFiles.length+')';
+
+  $('selectedFiles').innerHTML=
+    selectedFiles.map((f,i)=>`
+
+      <div class="subpanel p-3 flex items-center gap-3">
+
+        <div class="w-9 h-9 rounded-xl bg-blue-500/15 text-blue-400 flex items-center justify-center">
+          <i data-lucide="file" class="w-4 h-4"></i>
+        </div>
+
+        <div class="min-w-0 flex-1">
+
+          <div class="font-medium text-sm truncate">
+            ${esc(f.name)}
+          </div>
+
+          <div class="text-xs muted">
+            ${fmtSize(f.size)}
+          </div>
+
+        </div>
+
+        <button
+          class="text-red-400 p-2"
+          data-remove="${i}"
+          aria-label="Rimuovi"
+        >
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+
+      </div>
+
+    `).join('');
+
+  $('selectedFiles')
+    .querySelectorAll('[data-remove]')
+    .forEach(b=>{
+
+      b.addEventListener('click',()=>{
+
+        selectedFiles.splice(
+          Number(b.dataset.remove),
+          1
+        );
+
+        renderSelected();
+
+      });
+
+    });
+
+  lucide.createIcons();
+
+}
+
+
+$('clearFiles').addEventListener('click',()=>{
+
+  selectedFiles=[];
+
+  $('fileInput').value='';
+
+  renderSelected();
+
+});
+
+
+/* =========================================================
+   CODICE DI RISCOSSIONE
+========================================================= */
+
+function randomCode(){
+
+  const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+  let s='';
+
+  for(let i=0;i<5;i++)
+    s+=chars[Math.floor(Math.random()*chars.length)];
+
+  return s;
+
+}
+
+
+/* =========================================================
+   PROGRESSO UPLOAD
+========================================================= */
+
+function setProgress(p,text,detail=''){
+
+  $('uploadStatus').classList.remove('hidden');
+
+  $('uploadProgress').style.width=p+'%';
+
+  $('uploadPercent').textContent=
+    Math.round(p)+'%';
+
+  $('uploadStatusText').textContent=text;
+
+  $('uploadDetails').textContent=detail;
+
+}
+
+
+/* =========================================================
+   DROPBOX API
+========================================================= */
+
+async function dropboxRequest(endpoint,args){
+
+  const r=await fetch(
+    'https://api.dropboxapi.com/2/'+endpoint,
+    {
+      method:'POST',
+      headers:{
+        Authorization:'Bearer '+accessToken,
+        'Content-Type':'application/json'
+      },
+      body:JSON.stringify(args||{})
+    }
+  );
+
+  const d=await r.json().catch(()=>({}));
+
+  if(!r.ok)
+    throw new Error(
+      d.error_summary ||
+      d.error?.['.tag'] ||
+      'Errore Dropbox'
+    );
+
+  return d;
+
+}
+
+
+/* =========================================================
+   UPLOAD FILE SINGOLO
+========================================================= */
+
+async function uploadSmall(file,path){
+
+  const r=await fetch(
+    'https://content.dropboxapi.com/2/files/upload',
+    {
+      method:'POST',
+      headers:{
+        Authorization:'Bearer '+accessToken,
+        'Content-Type':'application/octet-stream',
+        'Dropbox-API-Arg':JSON.stringify({
+          path,
+          mode:'add',
+          autorename:false,
+          mute:false
+        })
+      },
+      body:file
+    }
+  );
+
+  const d=await r.json().catch(()=>({}));
+
+  if(!r.ok)
+    throw new Error(
+      d.error_summary ||
+      'Errore upload Dropbox'
+    );
+
+  return d;
+
+}
+
+
+/* =========================================================
+   UPLOAD FILE GRANDI A BLOCCHI
+========================================================= */
+
+async function uploadLarge(file,path,onProgress){
+
+  const start=await fetch(
+    'https://content.dropboxapi.com/2/files/upload_session/start',
+    {
+      method:'POST',
+      headers:{
+        Authorization:'Bearer '+accessToken,
+        'Content-Type':'application/octet-stream',
+        'Dropbox-API-Arg':JSON.stringify({
+          close:false
+        })
+      },
+      body:file.slice(0,CHUNK_SIZE)
+    }
+  );
+
+  let d=await start.json().catch(()=>({}));
+
+  if(!start.ok)
+    throw new Error(
+      d.error_summary ||
+      'Avvio upload non riuscito'
+    );
+
+  const session=d.session_id;
+
+  let offset=Math.min(CHUNK_SIZE,file.size);
+
+  while(offset<file.size){
+
+    const end=Math.min(
+      offset+CHUNK_SIZE,
+      file.size
+    );
+
+    const last=end===file.size;
+
+    if(last){
+
+      const r=await fetch(
+        'https://content.dropboxapi.com/2/files/upload_session/finish',
+        {
+          method:'POST',
+          headers:{
+            Authorization:'Bearer '+accessToken,
+            'Content-Type':'application/octet-stream',
+            'Dropbox-API-Arg':JSON.stringify({
+              cursor:{
+                session_id:session,
+                offset
+              },
+              commit:{
+                path,
+                mode:'add',
+                autorename:false,
+                mute:false
+              }
+            })
+          },
+          body:file.slice(offset,end)
+        }
+      );
+
+      d=await r.json().catch(()=>({}));
+
+      if(!r.ok)
+        throw new Error(
+          d.error_summary ||
+          'Chiusura upload non riuscita'
+        );
+
+    }
+    else{
+
+      const r=await fetch(
+        'https://content.dropboxapi.com/2/files/upload_session/append_v2',
+        {
+          method:'POST',
+          headers:{
+            Authorization:'Bearer '+accessToken,
+            'Content-Type':'application/octet-stream',
+            'Dropbox-API-Arg':JSON.stringify({
+              cursor:{
+                session_id:session,
+                offset
+              },
+              close:false
+            })
+          },
+          body:file.slice(offset,end)
+        }
+      );
+
+      if(!r.ok){
+
+        const x=await r.json().catch(()=>({}));
+
+        throw new Error(
+          x.error_summary ||
+          'Upload interrotto'
+        );
+
+      }
+
+    }
+
+    offset=end;
+
+    onProgress(offset/file.size);
+
+  }
+
+  return d;
+
+}
+
+
+/* =========================================================
+   CREAZIONE LINK CONDIVISO
+========================================================= */
+
+async function createSharedLink(path){
+
+  try{
+
+    return await dropboxRequest(
+      'sharing/create_shared_link_with_settings',
+      {
+        path,
+        settings:{
+          requested_visibility:{
+            '.tag':'public'
+          },
+          audience:{
+            '.tag':'public'
+          },
+          access:{
+            '.tag':'viewer'
+          },
+          allow_download:true
+        }
+      }
+    );
+
+  }
+  catch(e){
+
+    throw new Error(
+      'File caricato, ma creazione link Dropbox non riuscita: '+
+      e.message+
+      ' (controlla il permesso sharing.write).'
+    );
+
+  }
+
+}
+
+
+/* =========================================================
+   COMUNICAZIONE CON WORKER CLOUDFLARE
+========================================================= */
+
+async function workerCall(
+  path,
+  {
+    method='GET',
+    body=null,
+    auth=false
+  }={}
+){
+
+  const headers={
+    'Content-Type':'application/json'
+  };
+
+  if(auth){
+
+    if(!accessToken)
+      throw new Error('Collega prima Dropbox.');
+
+    headers.Authorization=
+      'Bearer '+accessToken;
+
+  }
+
+  const r=await fetch(
+    WORKER_URL+path,
+    {
+      method,
+      headers,
+      body:body
+        ?JSON.stringify(body)
+        :undefined
+    }
+  );
+
+  const d=await r.json().catch(()=>({}));
+
+  if(!r.ok)
+    throw new Error(
+      d.error ||
+      d.message ||
+      `Worker: HTTP ${r.status}`
+    );
+
+  return d;
+
+}
+
+
+/* =========================================================
+   PROCEDURA INVIO
+========================================================= */
+
+$('uploadBtn').addEventListener(
+  'click',
+  async()=>{
+
+    if(!accessToken){
+
+      toast('Prima collega Dropbox.');
+
+      return;
+
+    }
+
+    if(!selectedFiles.length)
+      return;
+
+    $('uploadBtn').disabled=true;
+
+    $('newCodes').classList.add('hidden');
+
+    $('newCodesList').innerHTML='';
+
+    const done=[];
+
+    const total=selectedFiles.reduce(
+      (s,f)=>s+f.size,
+      0
+    );
+
+    let completed=0;
+
+    try{
+
+      for(let i=0;i<selectedFiles.length;i++){
+
+        const file=selectedFiles[i];
+
+        const safeName=file.name.replace(
+          /[\\/:*?"<>|]/g,
+          '_'
+        );
+
+        const path=
+          '/'+
+          Date.now()+
+          '_'+
+          crypto.randomUUID().slice(0,8)+
+          '_'+
+          safeName;
+
+        setProgress(
+          total?completed/total*100:0,
+          `Caricamento ${i+1}/${selectedFiles.length}: ${file.name}`,
+          fmtSize(file.size)
+        );
+
+        const onProgress=part=>{
+
+          setProgress(
+            total
+              ?(completed+part*file.size)/total*100
+              :100,
+            `Caricamento ${i+1}/${selectedFiles.length}: ${file.name}`,
+            fmtSize(file.size)
+          );
+
+        };
+
+        if(file.size<=150*1024*1024){
+
+          await uploadSmall(file,path);
+
+        }
+        else{
+
+          await uploadLarge(
+            file,
+            path,
+            onProgress
+          );
+
+        }
+
+        completed+=file.size;
+
+        setProgress(
+          total?completed/total*100:100,
+          'Creazione link Dropbox...',
+          file.name
+        );
+
+        const shared=await createSharedLink(path);
+
+        const link=shared.url;
+
+        if(!link)
+          throw new Error(
+            'Dropbox non ha restituito il link condiviso.'
+          );
+
+        const code=randomCode();
+
+        const record={
+
+          code,
+
+          name:file.name,
+
+          size:file.size,
+
+          link,
+
+          path,
+
+          createdAt:new Date().toISOString()
+
+        };
+
+        await workerCall(
+          '/api/register',
+          {
+            method:'POST',
+            body:record,
+            auth:true
+          }
+        );
+
+        done.push(record);
+
+      }
+
+
+      $('newCodesList').innerHTML=
+        done.map(x=>`
+
+          <div class="subpanel p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+
+            <div class="flex-1 min-w-0">
+
+              <div class="font-semibold truncate">
+                ${esc(x.name)}
+              </div>
+
+              <div class="text-xs muted">
+                ${fmtSize(x.size)}
+              </div>
+
+              <div class="text-2xl font-black tracking-[.22em] text-blue-400 mt-1">
+                ${esc(x.code)}
+              </div>
+
+            </div>
+
+            <div class="flex gap-2">
+
+              <button
+                class="btn btn-secondary copy-code"
+                data-code="${esc(x.code)}"
+              >
+                Copia codice
+              </button>
+
+              <a
+                class="btn btn-primary"
+                href="${esc(x.link)}"
+                target="_blank"
+                rel="noopener"
+              >
+                Apri link
+              </a>
+
+            </div>
+
+          </div>
+
+        `).join('');
+
+
+      $('newCodesList')
+        .querySelectorAll('.copy-code')
+        .forEach(b=>{
+
+          b.addEventListener('click',()=>{
+
+            navigator.clipboard.writeText(
+              b.dataset.code
+            )
+            .then(()=>toast('Codice copiato.'))
+            .catch(()=>toast('Copia non disponibile.'));
+
+          });
+
+        });
+
+
+      $('newCodes').classList.remove('hidden');
+
+      setProgress(
+        100,
+        'Completato',
+        'Tutti i file sono stati caricati e registrati.'
+      );
+
+      selectedFiles=[];
+
+      $('fileInput').value='';
+
+      renderSelected();
+
+      toast('Invio completato: codici generati.');
+
+      loadQueue();
+
+    }
+    catch(e){
+
+      console.error(e);
+
+      setProgress(
+        completed/Math.max(total,1)*100,
+        'Operazione interrotta',
+        e.message
+      );
+
+      toast(e.message,6500);
+
+    }
+    finally{
+
+      $('uploadBtn').disabled=false;
+
+    }
+
+  }
+);
+
+
+/* =========================================================
+   RICERCA CODICE
+========================================================= */
+
+$('redeemForm').addEventListener(
+  'submit',
+  async e=>{
+
+    e.preventDefault();
+
+    const code=$('redeemCode')
+      .value
+      .trim()
+      .toUpperCase();
+
+    if(!code) return;
+
+    $('redeemResult').innerHTML=
+      '<div class="muted text-sm">Ricerca in corso...</div>';
+
+    try{
+
+      const d=await workerCall(
+        '/api/redeem?code='+encodeURIComponent(code)
+      );
+
+      const items=
+        d.items ||
+        (d.item?[d.item]:[]);
+
+      if(!items.length){
+
+        $('redeemResult').innerHTML=`
+          <div class="subpanel p-4 text-sm muted">
+            Nessun file trovato per questo codice.
+          </div>
+        `;
+
+        return;
+
+      }
+
+      $('redeemResult').innerHTML=
+        items.map(x=>`
+
+          <div class="subpanel p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+
+            <div class="flex-1 min-w-0">
+
+              <div class="font-semibold break-words">
+                ${esc(x.name||'File condiviso')}
+              </div>
+
+              <div class="text-xs muted mt-1">
+                ${x.size?fmtSize(x.size):''}
+              </div>
+
+            </div>
+
+            <a
+              class="btn btn-primary text-center"
+              href="${esc(x.link)}"
+              target="_blank"
+              rel="noopener"
+            >
+              Scarica file
+            </a>
+
+          </div>
+
+        `).join('');
+
+    }
+    catch(err){
+
+      $('redeemResult').innerHTML=`
+        <div class="subpanel p-4 text-sm text-red-400">
+          ${esc(err.message)}
+        </div>
+      `;
+
+    }
+
+  }
+);
+
+
+$('redeemCode').addEventListener(
+  'input',
+  e=>{
+    e.target.value=e.target.value
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g,'');
+  }
+);
+
+
+/* =========================================================
+   CODA PERSONALE
+========================================================= */
+
+async function loadQueue(){
+
+  if(!accessToken){
+
+    $('queueInfo').textContent=
+      'Collega Dropbox per visualizzare i tuoi invii.';
+
+    $('queueList').innerHTML='';
+
+    return;
+
+  }
+
+  $('queueInfo').textContent='Caricamento...';
+
+  try{
+
+    const d=await workerCall(
+      '/api/list',
+      {auth:true}
+    );
+
+    queueItems=d.items||[];
+
+    $('queueInfo').textContent=
+      queueItems.length
+        ?`${queueItems.length} file registrati.`
+        :'Non ci sono file registrati.';
+
+
+    $('queueList').innerHTML=
+      queueItems.map(x=>`
+
+        <div class="subpanel p-3 flex flex-col sm:flex-row sm:items-center gap-3">
+
+          <div class="flex-1 min-w-0">
+
+            <div class="font-semibold truncate">
+              ${esc(x.name||'File')}
+            </div>
+
+            <div class="text-xs muted">
+              ${x.size?fmtSize(x.size):''}
+              · Codice
+              <strong class="tracking-wider">
+                ${esc(x.code||'')}
+              </strong>
+            </div>
+
+          </div>
+
+          <div class="flex gap-2">
+
+            <button
+              class="btn btn-secondary copy-queue"
+              data-code="${esc(x.code||'')}"
+            >
+              Copia codice
+            </button>
+
+            <button
+              class="btn btn-secondary delete-item text-red-400"
+              data-id="${esc(x.id||'')}"
+              data-code="${esc(x.code||'')}"
+            >
+              Rimuovi
+            </button>
+
+          </div>
+
+        </div>
+
       `).join('');
 
-      lucide.createIcons();
-    }
 
-    // Eliminazione file dalla coda
-    function removeFromQueue(index) {
-      const queue = readQueue();
-      queue.splice(index, 1);
-      localStorage.setItem('sharingportal_queue', JSON.stringify(queue));
-      renderQueueList();
-    }
-  </script>
+    $('queueList')
+      .querySelectorAll('.copy-queue')
+      .forEach(b=>{
+
+        b.addEventListener('click',()=>{
+
+          navigator.clipboard.writeText(
+            b.dataset.code
+          )
+          .then(()=>toast('Codice copiato.'));
+
+        });
+
+      });
+
+
+    $('queueList')
+      .querySelectorAll('.delete-item')
+      .forEach(b=>{
+
+        b.addEventListener('click',()=>{
+
+          deleteItem(
+            b.dataset.id,
+            b.dataset.code
+          );
+
+        });
+
+      });
+
+  }
+  catch(e){
+
+    $('queueInfo').textContent=
+      'Impossibile caricare la coda: '+e.message;
+
+    $('queueList').innerHTML='';
+
+  }
+
+}
+
+
+async function deleteItem(id,code){
+
+  if(!confirm(
+    'Vuoi rimuovere questo file dalla coda? Se il Worker è configurato per la cancellazione remota, verrà eliminato anche da Dropbox.'
+  ))
+    return;
+
+  try{
+
+    await workerCall(
+      '/api/item',
+      {
+        method:'DELETE',
+        body:{id,code},
+        auth:true
+      }
+    );
+
+    toast('Elemento rimosso.');
+
+    loadQueue();
+
+  }
+  catch(e){
+
+    toast(
+      'Rimozione non riuscita: '+e.message,
+      6000
+    );
+
+  }
+
+}
+
+
+$('refreshQueue').addEventListener(
+  'click',
+  loadQueue
+);
+
+
+/* =========================================================
+   AVVIO
+========================================================= */
+
+handleOAuth();
+
+lucide.createIcons();
+
+})();
+</script>
+
 </body>
 </html>
