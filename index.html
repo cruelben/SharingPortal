@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#101827">
-<title>SharingPortal 1.7.3</title>
+<title>SharingPortal 1.7.4</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/lucide@latest"></script>
 
@@ -71,7 +71,6 @@ body {
   color:var(--text);
   box-shadow:inset 0 0 0 1px var(--line);
 }
-/* Stile per tab disabilitato */
 .tab.disabled {
   opacity: 0.4;
   cursor: not-allowed;
@@ -182,9 +181,9 @@ code { font-family:ui-monospace,monospace; }
   </div>
 </div>
 
-<div class="max-w-5xl mx-auto px-4 py-7 md:py-10">
+<div class="max-w-5xl mx-auto px-4 py-7 md:py-10 flex flex-col min-h-[calc(100vh-80px)]">
 
-<header class="flex items-center justify-between gap-4 mb-8">
+<header class="flex items-center justify-between gap-4 mb-8 shrink-0">
   <div class="flex items-center gap-3">
     <div class="w-12 h-12 rounded-2xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-900/30">
       <i data-lucide="send" class="w-6 h-6 text-white"></i>
@@ -207,7 +206,7 @@ code { font-family:ui-monospace,monospace; }
   </div>
 </header>
 
-<div class="panel p-4 md:p-5 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-3">
+<div class="panel p-4 md:p-5 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0">
   <div class="flex items-center gap-3">
     <div id="connectionDot" class="w-2.5 h-2.5 rounded-full bg-amber-400"></div>
     <div>
@@ -222,7 +221,7 @@ code { font-family:ui-monospace,monospace; }
   </div>
 </div>
 
-<nav class="flex gap-2 p-1.5 rounded-2xl panel mb-6">
+<nav class="flex gap-2 p-1.5 rounded-2xl panel mb-6 shrink-0">
   <button class="tab flex-1" data-tab="send">
     <i data-lucide="upload" class="inline w-4 h-4 mr-1"></i>Invia
   </button>
@@ -234,184 +233,161 @@ code { font-family:ui-monospace,monospace; }
   </button>
 </nav>
 
-<!-- INVIA -->
-<section id="sendView" class="hidden-view space-y-5">
+<div class="flex-grow">
+  <!-- INVIA -->
+  <section id="sendView" class="hidden-view space-y-5">
 
-  <div class="panel p-5 md:p-7">
+    <div class="panel p-5 md:p-7">
 
-    <div class="mb-5">
-      <h2 class="text-xl font-bold">Invia i tuoi file</h2>
-      <p class="muted text-sm mt-1">
-        Seleziona uno o più file. Verrà generato un unico codice per tutto il gruppo.
-      </p>
-    </div>
-
-    <div id="dropzone" class="dropzone p-8 md:p-12 text-center cursor-pointer transition-all">
-      <input id="fileInput" type="file" multiple class="hidden">
-      <div id="dropzoneIcon" class="w-14 h-14 mx-auto rounded-2xl bg-blue-500/15 text-blue-400 flex items-center justify-center mb-4 transition-all">
-        <i data-lucide="files" class="w-7 h-7"></i>
-      </div>
-      <div id="dropzoneTitle" class="font-semibold text-lg transition-all">Trascina qui i file</div>
-      <p id="dropzoneSub" class="muted text-sm mt-1 transition-all">
-        oppure fai clic per selezionarli dal dispositivo
-      </p>
-      <button id="browseBtn" class="btn btn-secondary mt-5 transition-all">
-        Seleziona file
-      </button>
-    </div>
-
-    <div id="selectedWrap" class="hidden mt-5">
-
-      <div class="flex items-center justify-between mb-3">
-        <h3 class="font-semibold">
-          File selezionati <span id="fileCount" class="muted"></span>
-        </h3>
-        <button id="clearFiles" class="text-sm text-red-400">
-          Rimuovi tutti
-        </button>
-      </div>
-
-      <div id="selectedFiles" class="space-y-2"></div>
-
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-5">
-        <div class="text-sm muted">
-          I file saranno conservati separatamente nel tuo Dropbox.
-        </div>
-
-        <button id="uploadBtn" class="btn btn-primary flex items-center justify-center gap-2">
-          <i data-lucide="upload-cloud" class="w-4 h-4"></i>
-          Carica e genera codice
-        </button>
-      </div>
-
-    </div>
-  </div>
-
-  <div id="uploadStatus" class="hidden panel p-5">
-    <div class="flex items-center justify-between gap-3 mb-2">
-      <div id="uploadStatusText" class="font-semibold">Preparazione...</div>
-      <div id="uploadPercent" class="text-sm muted">0%</div>
-    </div>
-    <div class="progress">
-      <div id="uploadProgress"></div>
-    </div>
-    <div id="uploadDetails" class="text-xs muted mt-2"></div>
-  </div>
-
-  <div id="newCodes" class="hidden panel p-5">
-    <h3 class="font-bold text-lg mb-1">Gruppo pronto per il ritiro</h3>
-    <p class="text-sm muted mb-4">
-      Condividi questo unico codice con il destinatario. Chiunque lo conosca può accedere ai file del gruppo.
-    </p>
-    <div id="newCodesList" class="space-y-3"></div>
-  </div>
-
-</section>
-
-<!-- RICEVI -->
-<section id="receiveView" class="hidden-view space-y-5">
-
-  <div class="panel p-5 md:p-7">
-
-    <h2 class="text-xl font-bold">Ricevi i file</h2>
-
-    <p class="muted text-sm mt-1 mb-5">
-      Inserisci il codice ricevuto dal mittente per visualizzare tutti i file del gruppo.
-    </p>
-
-    <form id="redeemForm" class="flex flex-col sm:flex-row gap-3">
-
-      <input
-        id="redeemCode"
-        class="field uppercase tracking-[.25em] font-bold text-center sm:text-left"
-        maxlength="12"
-        placeholder="ES. A7K9Q"
-        autocomplete="off"
-        required
-      >
-
-      <button class="btn btn-primary whitespace-nowrap" type="submit">
-        Cerca file
-      </button>
-
-    </form>
-
-    <div id="redeemResult" class="mt-5"></div>
-
-  </div>
-
-</section>
-
-<!-- CODA -->
-<section id="queueView" class="hidden-view space-y-5">
-
-  <div class="panel p-5 md:p-7">
-
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
-
-      <div>
-        <h2 class="text-xl font-bold">La tua coda</h2>
+      <div class="mb-5">
+        <h2 class="text-xl font-bold">Invia i tuoi file</h2>
         <p class="muted text-sm mt-1">
-          Elenco dei gruppi e dei file registrati dal tuo account Dropbox.
+          Seleziona uno o più file. Verrà generato un unico codice per tutto il gruppo.
         </p>
       </div>
 
-      <button id="refreshQueue" class="btn btn-secondary">
-        Aggiorna elenco
-      </button>
+      <div id="dropzone" class="dropzone p-8 md:p-12 text-center cursor-pointer transition-all">
+        <input id="fileInput" type="file" multiple class="hidden">
+        <div id="dropzoneIcon" class="w-14 h-14 mx-auto rounded-2xl bg-blue-500/15 text-blue-400 flex items-center justify-center mb-4 transition-all">
+          <i data-lucide="files" class="w-7 h-7"></i>
+        </div>
+        <div id="dropzoneTitle" class="font-semibold text-lg transition-all">Trascina qui i file</div>
+        <p id="dropzoneSub" class="muted text-sm mt-1 transition-all">
+          oppure fai clic per selezionarli dal dispositivo
+        </p>
+        <button id="browseBtn" class="btn btn-secondary mt-5 transition-all">
+          Seleziona file
+        </button>
+      </div>
+
+      <div id="selectedWrap" class="hidden mt-5">
+
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-semibold">
+            File selezionati <span id="fileCount" class="muted"></span>
+          </h3>
+          <button id="clearFiles" class="text-sm text-red-400">
+            Rimuovi tutti
+          </button>
+        </div>
+
+        <div id="selectedFiles" class="space-y-2"></div>
+
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-5">
+          <div class="text-sm muted">
+            I file saranno conservati separatamente nel tuo Dropbox.
+          </div>
+
+          <button id="uploadBtn" class="btn btn-primary flex items-center justify-center gap-2">
+            <i data-lucide="upload-cloud" class="w-4 h-4"></i>
+            Carica e genera codice
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+    <div id="uploadStatus" class="hidden panel p-5">
+      <div class="flex items-center justify-between gap-3 mb-2">
+        <div id="uploadStatusText" class="font-semibold">Preparazione...</div>
+        <div id="uploadPercent" class="text-sm muted">0%</div>
+      </div>
+      <div class="progress">
+        <div id="uploadProgress"></div>
+      </div>
+      <div id="uploadDetails" class="text-xs muted mt-2"></div>
+    </div>
+
+    <div id="newCodes" class="hidden panel p-5">
+      <h3 class="font-bold text-lg mb-1">Gruppo pronto per il ritiro</h3>
+      <p class="text-sm muted mb-4">
+        Condividi questo unico codice con il destinatario. Chiunque lo conosca può accedere ai file del gruppo.
+      </p>
+      <div id="newCodesList" class="space-y-3"></div>
+    </div>
+
+  </section>
+
+  <!-- RICEVI -->
+  <section id="receiveView" class="hidden-view space-y-5">
+
+    <div class="panel p-5 md:p-7">
+
+      <h2 class="text-xl font-bold">Ricevi i file</h2>
+
+      <p class="muted text-sm mt-1 mb-5">
+        Inserisci il codice ricevuto dal mittente per visualizzare tutti i file del gruppo.
+      </p>
+
+      <form id="redeemForm" class="flex flex-col sm:flex-row gap-3">
+
+        <input
+          id="redeemCode"
+          class="field uppercase tracking-[.25em] font-bold text-center sm:text-left"
+          maxlength="12"
+          placeholder="ES. A7K9Q"
+          autocomplete="off"
+          required
+        >
+
+        <button class="btn btn-primary whitespace-nowrap" type="submit">
+          Recupera file
+        </button>
+
+      </form>
+
+      <div id="redeemResult" class="mt-5"></div>
 
     </div>
 
-    <div id="queueInfo" class="text-sm muted mb-3">
-      Collega Dropbox per visualizzare i tuoi invii.
+  </section>
+
+  <!-- CODA -->
+  <section id="queueView" class="hidden-view space-y-5">
+
+    <div class="panel p-5 md:p-7">
+
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+
+        <div>
+          <h2 class="text-xl font-bold">La tua coda</h2>
+          <p class="muted text-sm mt-1">
+            Elenco dei gruppi e dei file registrati dal tuo account Dropbox.
+          </p>
+        </div>
+
+        <button id="refreshQueue" class="btn btn-secondary">
+          Aggiorna elenco
+        </button>
+
+      </div>
+
+      <div id="queueInfo" class="text-sm muted mb-3">
+        Collega Dropbox per visualizzare i tuoi invii.
+      </div>
+
+      <div id="queueList" class="space-y-2"></div>
+
     </div>
 
-    <div id="queueList" class="space-y-2"></div>
-
-  </div>
-
-</section>
-
-<!-- SUPPORTA IL PROGETTO -->
-<div class="panel p-5 md:p-6 mt-9 text-center">
-
-  <div class="flex items-center justify-center gap-2 mb-2">
-    <i data-lucide="heart" class="w-5 h-5 text-rose-400"></i>
-    <h3 class="text-lg font-bold">Supporta il progetto</h3>
-  </div>
-
-  <p class="text-sm muted mb-5 max-w-xl mx-auto">
-    Se SharingPortal ti è utile e vuoi contribuire al suo sviluppo,
-    puoi offrirmi un caffè. Grazie di cuore.
-  </p>
-
-  <div class="flex flex-wrap items-center justify-center gap-3">
-    <a href="https://ko-fi.com/cruelben" target="_blank" rel="noopener">
-      <img
-        src="https://img.shields.io/badge/Ko--fi-F16061?style=for-the-badge&logo=ko-fi&logoColor=white"
-        alt="Buy Me a Coffee at ko-fi.com"
-        class="h-8"
-      >
-    </a>
-    <a href="https://paypal.me/bben" target="_blank" rel="noopener">
-      <img
-        src="https://img.shields.io/badge/PayPal.me-00457C?style=for-the-badge&logo=paypal&logoColor=white"
-        alt="PayPal.me"
-        class="h-8"
-      >
-    </a>
-  </div>
-
-  <div class="text-xs muted mt-4">
-    <a href="https://ko-fi.com/cruelben" target="_blank" rel="noopener" class="hover:text-blue-400">ko-fi.com/cruelben</a>
-    ·
-    <a href="https://paypal.me/bben" target="_blank" rel="noopener" class="hover:text-blue-400">paypal.me/bben</a>
-  </div>
-
+  </section>
 </div>
 
-<footer class="text-center text-xs muted mt-9">
-  SharingPortal · Versione 1.7.3 · Dropbox + Cloudflare Workers ·
+<!-- SUPPORTA IL PROGETTO (Versione Compatta e Discreta) -->
+<div class="flex flex-col sm:flex-row items-center justify-center gap-3 mt-12 mb-4 opacity-60 hover:opacity-100 transition-opacity">
+  <span class="text-xs muted">Supporta il progetto:</span>
+  <div class="flex items-center gap-2">
+    <a href="https://ko-fi.com/cruelben" target="_blank" rel="noopener">
+      <img src="https://img.shields.io/badge/Ko--fi-F16061?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Ko-fi" class="h-5 rounded">
+    </a>
+    <a href="https://paypal.me/bben" target="_blank" rel="noopener">
+      <img src="https://img.shields.io/badge/PayPal.me-00457C?style=for-the-badge&logo=paypal&logoColor=white" alt="PayPal" class="h-5 rounded">
+    </a>
+  </div>
+</div>
+
+<footer class="text-center text-xs muted pb-4 shrink-0">
+  SharingPortal · Versione 1.7.4 · Dropbox + Cloudflare Workers ·
   Non caricare contenuti riservati: il codice funziona come una chiave di accesso.
 </footer>
 
@@ -486,7 +462,7 @@ function setConnected(ok,sub=''){
     :'<i data-lucide="cloud" class="w-4 h-4"></i><span>Collega Dropbox</span>';
   
   updateDropzoneState();
-  updateNavTabs(); // Aggiorna lo stato visivo del tab Coda
+  updateNavTabs();
   lucide.createIcons();
 }
 
@@ -531,7 +507,6 @@ function updateNavTabs() {
 ========================================================= */
 
 function showTab(tab){
-  // Blocca il tab Coda se non connesso
   if (tab === 'queue' && !accessToken) {
     toast('Collega Dropbox per visualizzare la coda.');
     return;
@@ -545,7 +520,6 @@ function showTab(tab){
     $(x+'View').classList.toggle('hidden-view', x!==tab);
   });
 
-  // Mostra il pulsante Dropbox SOLO nel tab "Invia"
   if (tab === 'send') {
     $('connectBtn').classList.remove('hidden');
   } else {
@@ -557,7 +531,6 @@ function showTab(tab){
 
 document.querySelectorAll('[data-tab]').forEach(b=>{
   b.addEventListener('click',()=>{
-    // Impedisce il click visivo se il tab Coda è disabilitato
     if (b.dataset.tab === 'queue' && !accessToken) {
       toast('Collega Dropbox per accedere alla coda.');
       return;
@@ -605,20 +578,32 @@ async function sha256(s){
 }
 
 async function connectDropbox(){
-  const verifier=randomString(64);
-  const state=randomString(24);
-  const challenge=await sha256(verifier);
-  sessionStorage.setItem('sp_pkce_verifier', verifier);
-  sessionStorage.setItem('sp_oauth_state', state);
+  // BANNER DI ATTESA
+  showLoader('Connessione a Dropbox in corso...', 'Attendere prego, verrai reindirizzato al login.');
   
-  // SALVA IL TAB ATTUALE COSÌ DOPO IL LOGIN CI RITORNA
-  sessionStorage.setItem('sp_intended_tab', 'send');
-  
-  const u=new URL('https://www.dropbox.com/oauth2/authorize');
-  const params={ client_id:DROPBOX_APP_KEY, response_type:'code', redirect_uri:REDIRECT_URI,
-    token_access_type:'online', code_challenge:challenge, code_challenge_method:'S256', state, scope:SCOPES };
-  Object.entries(params).forEach(([k,v])=>u.searchParams.set(k,v));
-  location.href=u.toString();
+  try {
+    const verifier=randomString(64);
+    const state=randomString(24);
+    const challenge=await sha256(verifier);
+    sessionStorage.setItem('sp_pkce_verifier', verifier);
+    sessionStorage.setItem('sp_oauth_state', state);
+    
+    sessionStorage.setItem('sp_intended_tab', 'send');
+    
+    const u=new URL('https://www.dropbox.com/oauth2/authorize');
+    const params={ client_id:DROPBOX_APP_KEY, response_type:'code', redirect_uri:REDIRECT_URI,
+      token_access_type:'online', code_challenge:challenge, code_challenge_method:'S256', state, scope:SCOPES };
+    Object.entries(params).forEach(([k,v])=>u.searchParams.set(k,v));
+    
+    // Piccolo timeout per far vedere il loader prima del redirect
+    setTimeout(() => {
+      location.href=u.toString();
+    }, 500);
+    
+  } catch(e) {
+    hideLoader();
+    toast('Errore durante il reindirizzamento: ' + e.message);
+  }
 }
 
 async function handleOAuth(){
@@ -652,7 +637,6 @@ async function handleOAuth(){
     setConnected(true, 'Account autorizzato. Token valido per questa sessione.');
     toast('Dropbox collegato correttamente.');
     
-    // LEGGE IL TAB INTENZIONATO E CI TORNA
     const intendedTab = sessionStorage.getItem('sp_intended_tab') || 'send';
     sessionStorage.removeItem('sp_intended_tab');
     showTab(intendedTab);
@@ -1200,10 +1184,8 @@ $('refreshQueue').addEventListener('click', loadQueue);
 handleOAuth();
 lucide.createIcons();
 updateDropzoneState(); 
-updateNavTabs(); // Imposta il blocco iniziale sul tab Coda
+updateNavTabs(); 
 
-// All'avvio, se non c'è un login in corso e non c'è un token, vai su Ricevi.
-// Se c'è un token (appena loggato), handleOAuth avrà già impostato il tab corretto.
 if (!sessionStorage.getItem('sp_intended_tab') && !accessToken) {
   showTab('receive');
 }
